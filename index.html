@@ -279,34 +279,34 @@
             constructor() {
                 this.x = Math.random() * state.width;
                 this.y = Math.random() * state.height * 0.6; // Upper portion
-                this.size = 0.5 + Math.random() * 2;
+                this.size = 1 + Math.random() * 2.5; // Larger stars
                 this.twinkleSpeed = 0.02 + Math.random() * 0.03;
                 this.twinklePhase = Math.random() * Math.PI * 2;
-                this.brightness = 0.3 + Math.random() * 0.7;
+                this.brightness = 0.6 + Math.random() * 0.4; // Brighter stars
             }
             update() {
                 this.twinklePhase += this.twinkleSpeed;
             }
             draw(ctx) {
                 const twinkle = (Math.sin(this.twinklePhase) + 1) / 2;
-                const alpha = this.brightness * twinkle * 0.8;
+                const alpha = this.brightness * twinkle * 0.95; // More visible
                 
                 ctx.save();
                 ctx.globalCompositeOperation = 'lighter';
                 
-                // Star glow
-                ctx.shadowBlur = 4 + twinkle * 6;
-                ctx.shadowColor = `rgba(200, 220, 255, ${alpha})`;
+                // Star glow - enhanced
+                ctx.shadowBlur = 8 + twinkle * 12;
+                ctx.shadowColor = `rgba(220, 235, 255, ${alpha})`;
                 ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
                 ctx.fill();
                 
-                // Cross sparkle effect for brighter stars
-                if (this.brightness > 0.6) {
-                    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
-                    ctx.lineWidth = 0.5;
-                    const len = this.size * 3 * twinkle;
+                // Cross sparkle effect for all stars
+                if (this.brightness > 0.5) {
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.7})`;
+                    ctx.lineWidth = 1;
+                    const len = this.size * 4 * twinkle;
                     ctx.beginPath();
                     ctx.moveTo(this.x - len, this.y);
                     ctx.lineTo(this.x + len, this.y);
@@ -604,23 +604,39 @@
                     }
                     ctx.fill();
                     
-                    // Add enhanced texture (spots and patterns)
+                    // Add enhanced texture (spots and patterns) - more variety
                     if (!isShadow && i > 0 && CONFIG.enableFishTexture) {
                         // Multiple texture dots for richer appearance
                         if (i % 2 === 0) {
-                            ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
                             ctx.beginPath();
-                            ctx.arc(t.x + r * 0.3, t.y + r * 0.2, r * 0.18, 0, Math.PI * 2);
+                            ctx.arc(t.x + r * 0.3, t.y + r * 0.2, r * 0.2, 0, Math.PI * 2);
                             ctx.fill();
                             ctx.beginPath();
-                            ctx.arc(t.x - r * 0.2, t.y - r * 0.3, r * 0.15, 0, Math.PI * 2);
+                            ctx.arc(t.x - r * 0.2, t.y - r * 0.3, r * 0.18, 0, Math.PI * 2);
+                            ctx.fill();
+                            // Add third highlight spot
+                            ctx.beginPath();
+                            ctx.arc(t.x - r * 0.1, t.y + r * 0.35, r * 0.12, 0, Math.PI * 2);
                             ctx.fill();
                         }
-                        // Add subtle stripe texture
+                        // Add subtle stripe texture with variety
                         if (i % 3 === 0) {
-                            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
                             ctx.beginPath();
-                            ctx.arc(t.x, t.y + r * 0.4, r * 0.2, 0, Math.PI * 2);
+                            ctx.arc(t.x, t.y + r * 0.4, r * 0.25, 0, Math.PI * 2);
+                            ctx.fill();
+                            // Add contrasting spot
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                            ctx.beginPath();
+                            ctx.arc(t.x + r * 0.35, t.y - r * 0.15, r * 0.15, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                        // Add random metallic highlights
+                        if (i === 1 || i === 2) {
+                            ctx.fillStyle = 'rgba(255, 255, 200, 0.3)';
+                            ctx.beginPath();
+                            ctx.arc(t.x + r * 0.4, t.y, r * 0.1, 0, Math.PI * 2);
                             ctx.fill();
                         }
                     }
@@ -822,7 +838,7 @@
             
             // Create stars for night mode
             if (CONFIG.enableStars) {
-                const starCount = isMobile ? 25 : 80;  // Fewer but visible stars on mobile
+                const starCount = isMobile ? 40 : 120;  // More visible stars
                 for(let i = 0; i < starCount; i++) {
                     state.stars.push(new Star());
                 }
