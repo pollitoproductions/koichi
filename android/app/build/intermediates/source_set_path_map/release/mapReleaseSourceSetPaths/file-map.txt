@@ -1,0 +1,7 @@
+com.pollitoproductions.koichi.app-pngs-0 /workspaces/koichi/android/app/build/generated/res/pngs/release
+com.pollitoproductions.koichi.app-resValues-1 /workspaces/koichi/android/app/build/generated/res/resValues/release
+com.pollitoproductions.koichi.app-packageReleaseResources-2 /workspaces/koichi/android/app/build/intermediates/incremental/release/packageReleaseResources/merged.dir
+com.pollitoproductions.koichi.app-packageReleaseResources-3 /workspaces/koichi/android/app/build/intermediates/incremental/release/packageReleaseResources/stripped.dir
+com.pollitoproductions.koichi.app-release-4 /workspaces/koichi/android/app/build/intermediates/merged_res/release/mergeReleaseResources
+com.pollitoproductions.koichi.app-main-5 /workspaces/koichi/android/app/src/main/res
+com.pollitoproductions.koichi.app-release-6 /workspaces/koichi/android/app/src/release/res
