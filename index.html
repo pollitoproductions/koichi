@@ -423,23 +423,34 @@
                 this.y = Math.random() * state.height;
                 this.angle = Math.random() * Math.PI * 2;
                 this.speed = CONFIG.baseSpeed + Math.random() * 0.5;
-                this.size = 14 + Math.random() * 12;  // Increased from 12+10 to 14+12 for longer bodies
+                // Make fish longer and add more variety
+                this.size = 14 + Math.random() * 18;  // Increased max for longer bodies
                 this.wiggle = Math.random() * 10;
-                
-                // Random Color Assignment - Expanded variety
-                const r = Math.random();
-                if (r < 0.12) { this.col = '#f0f0f0'; this.spots = '#ff4400'; } // Kohaku
-                else if (r < 0.24) { this.col = '#ffaa00'; this.spots = '#ffaa00'; } // Gold
-                else if (r < 0.36) { this.col = '#ffffff'; this.spots = 'tancho'; } // Tancho
-                else if (r < 0.48) { this.col = '#ffdd44'; this.spots = '#222222'; } // Ki Utsuri
-                else if (r < 0.60) { this.col = '#7799aa'; this.spots = '#335566'; } // Asagi
-                else if (r < 0.72) { this.col = '#222222'; this.spots = '#ff4400'; } // Showa
-                else if (r < 0.82) { this.col = '#ffffff'; this.spots = '#ff6600'; } // Orange & White
-                else if (r < 0.90) { this.col = '#ff8844'; this.spots = '#ffffff'; } // Coral
-                else { this.col = '#6688bb'; this.spots = '#ffffff'; } // Blue & White
 
-                // Initialize tail segments (fewer on mobile for performance)
-                const tailSegments = CONFIG.enableGradients ? 10 : 3;  // Further reduced from 4 to 3 for low-end
+                // Expanded color and spot variety
+                const patterns = [
+                    {col:'#f0f0f0', spots:'#ff4400'}, // Kohaku
+                    {col:'#ffaa00', spots:'#ffaa00'}, // Gold
+                    {col:'#ffffff', spots:'tancho'}, // Tancho
+                    {col:'#ffdd44', spots:'#222222'}, // Ki Utsuri
+                    {col:'#7799aa', spots:'#335566'}, // Asagi
+                    {col:'#222222', spots:'#ff4400'}, // Showa
+                    {col:'#ffffff', spots:'#ff6600'}, // Orange & White
+                    {col:'#ff8844', spots:'#ffffff'}, // Coral
+                    {col:'#6688bb', spots:'#ffffff'}, // Blue & White
+                    {col:'#e0e0e0', spots:'#ffcc00'}, // Platinum
+                    {col:'#ffcc00', spots:'#222222'}, // Lemon Black
+                    {col:'#ff6600', spots:'#222222'}, // Orange Black
+                    {col:'#335566', spots:'#ffcc00'}, // Steel Lemon
+                    {col:'#ff4400', spots:'#ffffff'}, // Red White
+                    {col:'#222222', spots:'#e0e0e0'}, // Black Platinum
+                ];
+                const pick = patterns[Math.floor(Math.random()*patterns.length)];
+                this.col = pick.col;
+                this.spots = pick.spots;
+
+                // Tail segments: longer fish get more segments
+                const tailSegments = CONFIG.enableGradients ? Math.floor(12 + Math.random()*4) : Math.floor(4 + Math.random()*2);
                 this.trail = [];
                 for(let i=0; i<tailSegments; i++) this.trail.push({x:this.x, y:this.y});
             }
