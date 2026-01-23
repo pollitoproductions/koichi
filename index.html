@@ -121,6 +121,8 @@
             waves: [],
             fish: [],
             food: [],
+            bubbles: [],
+            particles: [],
             input: { x: null, y: null, active: false },
             
             // Flags
@@ -248,6 +250,73 @@
         // 2. GAME ENTITIES
         // ============================================
         
+        // Bubble Class
+        class Bubble {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.size = 2 + Math.random() * 4;
+                this.speed = 0.5 + Math.random() * 1.5;
+                this.wobble = Math.random() * Math.PI * 2;
+                this.wobbleSpeed = 0.02 + Math.random() * 0.03;
+            }
+            update() {
+                this.y -= this.speed;
+                this.wobble += this.wobbleSpeed;
+                this.x += Math.sin(this.wobble) * 0.5;
+            }
+            draw(ctx) {
+                const gradient = ctx.createRadialGradient(
+                    this.x - this.size * 0.3, this.y - this.size * 0.3, 0,
+                    this.x, this.y, this.size
+                );
+                gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+                gradient.addColorStop(0.5, 'rgba(200, 240, 255, 0.4)');
+                gradient.addColorStop(1, 'rgba(100, 200, 255, 0.1)');
+                
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Highlight
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                ctx.beginPath();
+                ctx.arc(this.x - this.size * 0.3, this.y - this.size * 0.3, this.size * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Particle Class (for eating effects)
+        class Particle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 2 + Math.random() * 3;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.life = 30;
+                this.age = 0;
+                this.size = 2 + Math.random() * 2;
+                this.color = `hsl(${30 + Math.random() * 30}, 80%, ${50 + Math.random() * 20}%)`;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vx *= 0.95;
+                this.vy *= 0.95;
+                this.age++;
+            }
+            draw(ctx) {
+                const alpha = 1 - (this.age / this.life);
+                ctx.fillStyle = this.color.replace(')', `, ${alpha})`).replace('hsl', 'hsla');
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
         // Food Pellet Class
         class Pellet {
             constructor(x, y) {
@@ -331,6 +400,11 @@
                             state.food = state.food.filter(f => f !== nearestFood);
                             playSound('chomp'); // Play new Gulp sound
                             this.wiggle += 10; // Excited wiggle
+                            
+                            // Create eating particles
+                            for(let i = 0; i < 8; i++) {
+                                state.particles.push(new Particle(nearestFood.x, nearestFood.y));
+                            }
                         }
                     }
                 }
@@ -400,7 +474,12 @@
                 ctx.lineTo(0,0);
                 ctx.quadraticCurveTo(-5, finS, -finS, finS/2 - (finWag*5));
                 ctx.lineTo(0,0);
-                if (!isShadow) ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                if (!isShadow) {
+                    const finGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, finS);
+                    finGrad.addColorStop(0, 'rgba(255,255,255,0.8)');
+                    finGrad.addColorStop(1, 'rgba(255,255,255,0.3)');
+                    ctx.fillStyle = finGrad;
+                }
                 ctx.fill();
                 ctx.restore();
 
@@ -415,9 +494,16 @@
                     if (isShadow) { 
                         ctx.fillStyle = 'rgba(0,0,0,0.4)'; 
                     } else {
-                        // Pattern logic
-                        if (this.spots === 'tancho') ctx.fillStyle = (i === 0) ? '#ff0000' : this.col;
-                        else ctx.fillStyle = (i%3===0 || i===0) ? this.col : this.spots;
+                        // Pattern logic with gradient
+                        let baseColor;
+                        if (this.spots === 'tancho') baseColor = (i === 0) ? '#ff0000' : this.col;
+                        else baseColor = (i%3===0 || i===0) ? this.col : this.spots;
+                        
+                        // Add subtle gradient for depth
+                        const grad = ctx.createRadialGradient(t.x - r*0.3, t.y - r*0.3, 0, t.x, t.y, r);
+                        grad.addColorStop(0, this.lightenColor(baseColor, 20));
+                        grad.addColorStop(1, baseColor);
+                        ctx.fillStyle = grad;
                     }
                     ctx.fill();
                 });
@@ -430,8 +516,21 @@
                     ctx.fillStyle = 'black';
                     ctx.beginPath(); ctx.arc(4, -this.size*0.6, 2, 0, Math.PI*2); ctx.fill();
                     ctx.beginPath(); ctx.arc(4, this.size*0.6, 2, 0, Math.PI*2); ctx.fill();
+                    // Eye shine
+                    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                    ctx.beginPath(); ctx.arc(4.5, -this.size*0.6 - 0.5, 0.8, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(4.5, this.size*0.6 - 0.5, 0.8, 0, Math.PI*2); ctx.fill();
                     ctx.restore();
                 }
+            }
+            
+            lightenColor(col, percent) {
+                // Simple color lightening
+                const num = parseInt(col.replace('#',''), 16);
+                const r = Math.min(255, ((num >> 16) & 0xff) + percent);
+                const g = Math.min(255, ((num >> 8) & 0xff) + percent);
+                const b = Math.min(255, (num & 0xff) + percent);
+                return `rgb(${r},${g},${b})`;
             }
         }
 
@@ -496,24 +595,48 @@
             // Gradient Background
             const grad = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.max(state.width, state.height));
             grad.addColorStop(0, palette.shallow);
-            grad.addColorStop(1, palette.deep);
+            grad.addColorStop(0.7, palette.deep);
+            grad.addColorStop(1, state.nightMode ? '#000000' : '#001820');
             ctx.fillStyle = grad;
             ctx.fillRect(0,0,state.width, state.height);
 
-            // Caustics (Light Rays)
+            // Caustics (Light Rays) - Enhanced
             ctx.save();
             ctx.globalCompositeOperation = 'overlay';
-            ctx.fillStyle = palette.caustic;
             const time = t * 0.0003;
-            for(let i = 0; i < 7; i++) {
-                const offsetX = Math.sin(time + i) * 200;
-                const offsetY = Math.cos(time * 0.7 + i) * 150;
-                const size = 150 + Math.sin(time * 0.5 + i)*50;
+            for(let i = 0; i < 10; i++) {
+                const offsetX = Math.sin(time + i * 0.7) * 250;
+                const offsetY = Math.cos(time * 0.7 + i * 0.5) * 180;
+                const size = 120 + Math.sin(time * 0.5 + i)*60;
+                
+                const causticGrad = ctx.createRadialGradient(
+                    cx + offsetX, cy + offsetY, 0,
+                    cx + offsetX, cy + offsetY, size
+                );
+                causticGrad.addColorStop(0, state.nightMode ? 'rgba(100,150,255,0.15)' : 'rgba(255,255,255,0.15)');
+                causticGrad.addColorStop(1, 'rgba(0,0,0,0)');
+                
+                ctx.fillStyle = causticGrad;
                 ctx.beginPath();
                 ctx.ellipse(cx + offsetX, cy + offsetY, size, size * 0.6, time + i, 0, Math.PI * 2);
                 ctx.fill();
             }
             ctx.restore();
+            
+            // Subtle sparkles on water surface
+            if (Math.random() < 0.05) {
+                const sparkleX = Math.random() * state.width;
+                const sparkleY = Math.random() * state.height;
+                ctx.save();
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.fillStyle = state.nightMode ? 'rgba(150,200,255,0.3)' : 'rgba(255,255,255,0.4)';
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = ctx.fillStyle;
+                ctx.beginPath();
+                ctx.arc(sparkleX, sparkleY, 1 + Math.random() * 2, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
         }
 
         function init() {
@@ -523,6 +646,14 @@
             
             // Restore Audio Preference
             if (localStorage.getItem('wb_v12_audio') === 'true') toggleAudio(true);
+            
+            // Spawn initial bubbles
+            for(let i = 0; i < 15; i++) {
+                state.bubbles.push(new Bubble(
+                    Math.random() * state.width,
+                    Math.random() * state.height
+                ));
+            }
             
             // Background Suspension Logic (Saves battery)
             document.addEventListener("visibilitychange", () => {
@@ -552,6 +683,18 @@
             
             drawWater(Date.now());
             
+            // Spawn new bubbles randomly
+            if (Math.random() < 0.1 && state.bubbles.length < 30) {
+                state.bubbles.push(new Bubble(
+                    Math.random() * state.width,
+                    state.height + 10
+                ));
+            }
+            
+            // Update & Draw Bubbles
+            state.bubbles = state.bubbles.filter(b => b.y > -10);
+            state.bubbles.forEach(b => { b.update(); b.draw(ctx); });
+            
             // Update & Draw Food
             state.food.forEach(f => { f.update(); f.draw(ctx); });
 
@@ -560,8 +703,18 @@
             const iy = state.input.active ? state.input.y : null;
             state.fish.forEach(f => { f.update(ix, iy); f.draw(ctx); });
 
-            // Water Surface Overlay (Depth effect)
-            ctx.fillStyle = state.nightMode ? 'rgba(0, 5, 15, 0.4)' : 'rgba(0, 30, 40, 0.1)';
+            // Update & Draw Particles
+            state.particles = state.particles.filter(p => p.age < p.life);
+            state.particles.forEach(p => { p.update(); p.draw(ctx); });
+
+            // Water Surface Overlay (Depth effect) with vignette
+            const vignetteGrad = ctx.createRadialGradient(
+                state.width/2, state.height/2, state.width * 0.3,
+                state.width/2, state.height/2, state.width * 0.8
+            );
+            vignetteGrad.addColorStop(0, state.nightMode ? 'rgba(0, 5, 15, 0.1)' : 'rgba(0, 30, 40, 0.05)');
+            vignetteGrad.addColorStop(1, state.nightMode ? 'rgba(0, 5, 15, 0.6)' : 'rgba(0, 30, 40, 0.3)');
+            ctx.fillStyle = vignetteGrad;
             ctx.fillRect(0,0,state.width, state.height);
 
             // Update & Draw Waves
