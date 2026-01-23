@@ -84,11 +84,11 @@
             </svg>
         </div>
 
-        <div id="btn-mode" class="btn" title="Toggle Mode">
-            <svg id="icon-water" viewBox="0 0 24 24">
-                <path d="M12 20c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-18C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m0 5c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5z"/>
+        <div id="btn-mode" class="btn active" title="Toggle Mode">
+            <svg id="icon-hand" viewBox="0 0 24 24" style="display:none">
+                <path d="M23 5.5V20c0 2.2-1.8 4-4 4h-7.3c-1.08 0-2.1-.43-2.85-1.19L1 14.83c-.27-.27-.27-.71 0-.98l.59-.59c.27-.27.72-.27.99 0L6 16.7V5c0-.83.67-1.5 1.5-1.5S9 4.17 9 5v6.5h1.5V3c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v8.5H15V4.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v9H19V5.5c0-.83.67-1.5 1.5-1.5S22 4.67 22 5.5z"/>
             </svg>
-            <svg id="icon-food" viewBox="0 0 24 24" style="display:none">
+            <svg id="icon-food" viewBox="0 0 24 24">
                 <path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/>
             </svg>
         </div>
@@ -136,7 +136,7 @@
             
             // Flags
             audioEnabled: false,
-            feedingMode: false,
+            feedingMode: true,
             nightMode: false,
             running: true,
 
@@ -966,7 +966,7 @@
 
         function toggleMode() {
             state.feedingMode = !state.feedingMode;
-            document.getElementById('icon-water').style.display = state.feedingMode ? 'none' : 'block';
+            document.getElementById('icon-hand').style.display = state.feedingMode ? 'none' : 'block';
             document.getElementById('icon-food').style.display = state.feedingMode ? 'block' : 'none';
             document.getElementById('btn-mode').classList.toggle('active', state.feedingMode);
         }
