@@ -38,8 +38,8 @@ public class MainActivity extends Activity {
         // Stay on same page
         webView.setWebViewClient(new WebViewClient());
         
-        // Load the game
-        webView.loadUrl("file:///android_asset/index.html");
+        // Load the game from GitHub Pages
+        webView.loadUrl("https://pollitoproductions.github.io/koichi/");
         
         setContentView(webView);
     }
