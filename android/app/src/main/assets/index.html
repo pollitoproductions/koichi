@@ -106,13 +106,17 @@
         // --- CONFIGURATION ---
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         const CONFIG = {
-            fishCount: isMobile ? 12 : 20,
+            fishCount: isMobile ? 8 : 20,
             baseSpeed: 1.0,
             fleeSpeed: 9.0,
             fleeRadius: 350,
-            maxBubbles: isMobile ? 15 : 30,
-            maxParticles: isMobile ? 20 : 50,
+            maxBubbles: isMobile ? 8 : 30,
+            maxParticles: isMobile ? 10 : 50,
             renderQuality: isMobile ? 'low' : 'high',
+            targetFPS: isMobile ? 30 : 60,  // Lower frame rate on mobile
+            enableGradients: !isMobile,      // Disable gradients on mobile
+            enableCaustics: !isMobile,       // Disable caustics on mobile
+            enableStars: !isMobile,          // Disable stars on mobile
             colors: {
                 day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
                 night: { deep: '#000a12', shallow: '#001a24', caustic: 'rgba(100,150,255,0.04)' }
@@ -139,7 +143,11 @@
             // Audio Resources
             audioCtx: null,
             gainNode: null,
-            animationId: null
+            animationId: null,
+            
+            // Frame timing for FPS limiting
+            lastFrameTime: 0,
+            frameInterval: 1000 / CONFIG.targetFPS
         };
 
         const canvas = document.getElementById('gameCanvas');
@@ -316,24 +324,31 @@
                 this.x += Math.sin(this.wobble) * 0.5;
             }
             draw(ctx) {
-                const gradient = ctx.createRadialGradient(
-                    this.x - this.size * 0.3, this.y - this.size * 0.3, 0,
-                    this.x, this.y, this.size
-                );
-                gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
-                gradient.addColorStop(0.5, 'rgba(200, 240, 255, 0.4)');
-                gradient.addColorStop(1, 'rgba(100, 200, 255, 0.1)');
+                if (CONFIG.enableGradients) {
+                    const gradient = ctx.createRadialGradient(
+                        this.x - this.size * 0.3, this.y - this.size * 0.3, 0,
+                        this.x, this.y, this.size
+                    );
+                    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+                    gradient.addColorStop(0.5, 'rgba(200, 240, 255, 0.4)');
+                    gradient.addColorStop(1, 'rgba(100, 200, 255, 0.1)');
+                    ctx.fillStyle = gradient;
+                } else {
+                    // Simple rendering for mobile
+                    ctx.fillStyle = 'rgba(200, 230, 255, 0.5)';
+                }
                 
-                ctx.fillStyle = gradient;
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
                 ctx.fill();
                 
-                // Highlight
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-                ctx.beginPath();
-                ctx.arc(this.x - this.size * 0.3, this.y - this.size * 0.3, this.size * 0.3, 0, Math.PI * 2);
-                ctx.fill();
+                // Highlight (skip on mobile for performance)
+                if (CONFIG.enableGradients) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                    ctx.beginPath();
+                    ctx.arc(this.x - this.size * 0.3, this.y - this.size * 0.3, this.size * 0.3, 0, Math.PI * 2);
+                    ctx.fill();
+                }
             }
         }
 
@@ -409,9 +424,10 @@
                 else if (r < 0.8) { this.col = '#7799aa'; this.spots = '#335566'; } // Asagi
                 else { this.col = '#222222'; this.spots = '#ff4400'; } // Showa
 
-                // Initialize tail segments
+                // Initialize tail segments (fewer on mobile for performance)
+                const tailSegments = CONFIG.enableGradients ? 10 : 6;
                 this.trail = [];
-                for(let i=0; i<10; i++) this.trail.push({x:this.x, y:this.y});
+                for(let i=0; i<tailSegments; i++) this.trail.push({x:this.x, y:this.y});
             }
 
             update(ix, iy) {
@@ -452,7 +468,7 @@
                             this.wiggle += 10; // Excited wiggle
                             
                             // Create eating particles (fewer on mobile)
-                            const particleCount = CONFIG.renderQuality === 'high' ? 8 : 4;
+                            const particleCount = CONFIG.enableGradients ? 8 : 3;
                             for(let i = 0; i < particleCount; i++) {
                                 state.particles.push(new Particle(nearestFood.x, nearestFood.y));
                             }
@@ -528,10 +544,14 @@
                 ctx.quadraticCurveTo(-5, finS, -finS, finS/2 - (finWag*5));
                 ctx.lineTo(0,0);
                 if (!isShadow) {
-                    const finGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, finS);
-                    finGrad.addColorStop(0, 'rgba(255,255,255,0.8)');
-                    finGrad.addColorStop(1, 'rgba(255,255,255,0.3)');
-                    ctx.fillStyle = finGrad;
+                    if (CONFIG.enableGradients) {
+                        const finGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, finS);
+                        finGrad.addColorStop(0, 'rgba(255,255,255,0.8)');
+                        finGrad.addColorStop(1, 'rgba(255,255,255,0.3)');
+                        ctx.fillStyle = finGrad;
+                    } else {
+                        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                    }
                 }
                 ctx.fill();
                 ctx.restore();
@@ -547,16 +567,20 @@
                     if (isShadow) { 
                         ctx.fillStyle = 'rgba(0,0,0,0.4)'; 
                     } else {
-                        // Pattern logic with gradient
+                        // Pattern logic
                         let baseColor;
                         if (this.spots === 'tancho') baseColor = (i === 0) ? '#ff0000' : this.col;
                         else baseColor = (i%3===0 || i===0) ? this.col : this.spots;
                         
-                        // Add subtle gradient for depth
-                        const grad = ctx.createRadialGradient(t.x - r*0.3, t.y - r*0.3, 0, t.x, t.y, r);
-                        grad.addColorStop(0, this.lightenColor(baseColor, 20));
-                        grad.addColorStop(1, baseColor);
-                        ctx.fillStyle = grad;
+                        // Use gradient only on high-end devices
+                        if (CONFIG.enableGradients) {
+                            const grad = ctx.createRadialGradient(t.x - r*0.3, t.y - r*0.3, 0, t.x, t.y, r);
+                            grad.addColorStop(0, this.lightenColor(baseColor, 20));
+                            grad.addColorStop(1, baseColor);
+                            ctx.fillStyle = grad;
+                        } else {
+                            ctx.fillStyle = baseColor;
+                        }
                     }
                     ctx.fill();
                     
@@ -676,25 +700,30 @@
             const palette = state.nightMode ? CONFIG.colors.night : CONFIG.colors.day;
             const cx = state.width/2, cy = state.height/2;
             
-            // Gradient Background
-            const grad = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.max(state.width, state.height));
-            grad.addColorStop(0, palette.shallow);
-            grad.addColorStop(0.7, palette.deep);
-            grad.addColorStop(1, state.nightMode ? '#000000' : '#001820');
-            ctx.fillStyle = grad;
+            // Background - use gradient only on high-end devices
+            if (CONFIG.enableGradients) {
+                const grad = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.max(state.width, state.height));
+                grad.addColorStop(0, palette.shallow);
+                grad.addColorStop(0.7, palette.deep);
+                grad.addColorStop(1, state.nightMode ? '#000000' : '#001820');
+                ctx.fillStyle = grad;
+            } else {
+                // Solid color for low-end devices
+                ctx.fillStyle = palette.deep;
+            }
             ctx.fillRect(0,0,state.width, state.height);
 
-            // Caustics (Light Rays) - Optimized for performance
-            ctx.save();
-            ctx.globalCompositeOperation = 'overlay';
-            const time = t * 0.0003;
-            const causticCount = CONFIG.renderQuality === 'high' ? 10 : 5;
-            for(let i = 0; i < causticCount; i++) {
-                const offsetX = Math.sin(time + i * 0.7) * 250;
-                const offsetY = Math.cos(time * 0.7 + i * 0.5) * 180;
-                const size = 120 + Math.sin(time * 0.5 + i)*60;
-                
-                if (CONFIG.renderQuality === 'high') {
+            // Caustics (Light Rays) - Skip on mobile
+            if (CONFIG.enableCaustics) {
+                ctx.save();
+                ctx.globalCompositeOperation = 'overlay';
+                const time = t * 0.0003;
+                const causticCount = 10;
+                for(let i = 0; i < causticCount; i++) {
+                    const offsetX = Math.sin(time + i * 0.7) * 250;
+                    const offsetY = Math.cos(time * 0.7 + i * 0.5) * 180;
+                    const size = 120 + Math.sin(time * 0.5 + i)*60;
+                    
                     const causticGrad = ctx.createRadialGradient(
                         cx + offsetX, cy + offsetY, 0,
                         cx + offsetX, cy + offsetY, size
@@ -702,18 +731,16 @@
                     causticGrad.addColorStop(0, state.nightMode ? 'rgba(100,150,255,0.15)' : 'rgba(255,255,255,0.15)');
                     causticGrad.addColorStop(1, 'rgba(0,0,0,0)');
                     ctx.fillStyle = causticGrad;
-                } else {
-                    ctx.fillStyle = state.nightMode ? 'rgba(100,150,255,0.08)' : 'rgba(255,255,255,0.08)';
+                    
+                    ctx.beginPath();
+                    ctx.ellipse(cx + offsetX, cy + offsetY, size, size * 0.6, time + i, 0, Math.PI * 2);
+                    ctx.fill();
                 }
-                
-                ctx.beginPath();
-                ctx.ellipse(cx + offsetX, cy + offsetY, size, size * 0.6, time + i, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.restore();
             }
-            ctx.restore();
             
-            // Subtle sparkles on water surface (high quality only)
-            if (CONFIG.renderQuality === 'high' && Math.random() < 0.05) {
+            // Subtle sparkles on water surface (skip on mobile)
+            if (CONFIG.enableGradients && Math.random() < 0.05) {
                 const sparkleX = Math.random() * state.width;
                 const sparkleY = Math.random() * state.height;
                 ctx.save();
@@ -737,7 +764,7 @@
             if (localStorage.getItem('wb_v12_audio') === 'true') toggleAudio(true);
             
             // Spawn initial bubbles (fewer on mobile)
-            const initialBubbles = CONFIG.renderQuality === 'high' ? 15 : 8;
+            const initialBubbles = CONFIG.maxBubbles;
             for(let i = 0; i < initialBubbles; i++) {
                 state.bubbles.push(new Bubble(
                     Math.random() * state.width,
@@ -745,10 +772,12 @@
                 ));
             }
             
-            // Create stars for night mode (fewer on mobile)
-            const starCount = CONFIG.renderQuality === 'high' ? 80 : 40;
-            for(let i = 0; i < starCount; i++) {
-                state.stars.push(new Star());
+            // Create stars for night mode (skip on mobile)
+            if (CONFIG.enableStars) {
+                const starCount = 80;
+                for(let i = 0; i < starCount; i++) {
+                    state.stars.push(new Star());
+                }
             }
             
             // Background Suspension Logic (Saves battery)
@@ -795,7 +824,18 @@
         function loop() {
             if (!state.running) return;
             
-            drawWater(Date.now());
+            // FPS limiting for mobile
+            const now = Date.now();
+            const elapsed = now - state.lastFrameTime;
+            
+            if (elapsed < state.frameInterval) {
+                state.animationId = requestAnimationFrame(loop);
+                return;
+            }
+            
+            state.lastFrameTime = now - (elapsed % state.frameInterval);
+            
+            drawWater(now);
             
             // Draw stars if night mode (before bubbles for depth)
             if (state.nightMode) {
@@ -803,7 +843,7 @@
             }
             
             // Spawn new bubbles randomly (limited for performance)
-            const bubbleSpawnRate = CONFIG.renderQuality === 'high' ? 0.1 : 0.05;
+            const bubbleSpawnRate = CONFIG.enableGradients ? 0.1 : 0.03;
             if (Math.random() < bubbleSpawnRate && state.bubbles.length < CONFIG.maxBubbles) {
                 state.bubbles.push(new Bubble(
                     Math.random() * state.width,
@@ -827,15 +867,17 @@
             state.particles = state.particles.filter(p => p.age < p.life).slice(0, CONFIG.maxParticles);
             state.particles.forEach(p => { p.update(); p.draw(ctx); });
 
-            // Water Surface Overlay (Depth effect) with vignette
-            const vignetteGrad = ctx.createRadialGradient(
-                state.width/2, state.height/2, state.width * 0.3,
-                state.width/2, state.height/2, state.width * 0.8
-            );
-            vignetteGrad.addColorStop(0, state.nightMode ? 'rgba(0, 5, 15, 0.1)' : 'rgba(0, 30, 40, 0.05)');
-            vignetteGrad.addColorStop(1, state.nightMode ? 'rgba(0, 5, 15, 0.6)' : 'rgba(0, 30, 40, 0.3)');
-            ctx.fillStyle = vignetteGrad;
-            ctx.fillRect(0,0,state.width, state.height);
+            // Water Surface Overlay (Depth effect) with vignette (skip on mobile)
+            if (CONFIG.enableGradients) {
+                const vignetteGrad = ctx.createRadialGradient(
+                    state.width/2, state.height/2, state.width * 0.3,
+                    state.width/2, state.height/2, state.width * 0.8
+                );
+                vignetteGrad.addColorStop(0, state.nightMode ? 'rgba(0, 5, 15, 0.1)' : 'rgba(0, 30, 40, 0.05)');
+                vignetteGrad.addColorStop(1, state.nightMode ? 'rgba(0, 5, 15, 0.6)' : 'rgba(0, 30, 40, 0.3)');
+                ctx.fillStyle = vignetteGrad;
+                ctx.fillRect(0,0,state.width, state.height);
+            }
 
             // Update & Draw Waves
             state.waves = state.waves.filter(w => w.age < w.life);
