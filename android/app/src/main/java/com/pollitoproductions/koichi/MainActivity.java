@@ -39,7 +39,7 @@ public class MainActivity extends Activity {
         webView.setWebViewClient(new WebViewClient());
         
         // Load the game from GitHub Pages
-        webView.loadUrl("https://pollitoproductions.github.io/koichi/");
+        webView.loadUrl("https://pollitoproductions.github.io/koi-chi/");
         
         setContentView(webView);
     }
