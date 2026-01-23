@@ -108,15 +108,17 @@
         const CONFIG = {
             fishCount: isMobile ? 8 : 20,
             baseSpeed: 1.0,
-            fleeSpeed: 9.0,
+            fleeSpeed: isMobile ? 5.0 : 9.0,
             fleeRadius: 350,
+            foodSpeed: isMobile ? 3.0 : 3.5,
+            maxFood: isMobile ? 16 : 40,  // 2x koi count on mobile (8 koi * 2 = 16)
             maxBubbles: isMobile ? 8 : 30,
             maxParticles: isMobile ? 10 : 50,
             renderQuality: isMobile ? 'low' : 'high',
             targetFPS: isMobile ? 30 : 60,  // Lower frame rate on mobile
             enableGradients: !isMobile,      // Disable gradients on mobile
             enableCaustics: !isMobile,       // Disable caustics on mobile
-            enableStars: !isMobile,          // Disable stars on mobile
+            enableStars: true,               // Enable stars on mobile
             colors: {
                 day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
                 night: { deep: '#000a12', shallow: '#001a24', caustic: 'rgba(100,150,255,0.04)' }
@@ -459,7 +461,7 @@
                     // Only notice food within 300px
                     if (nearestFood && nearestDist < 300) {
                         targetAngle = Math.atan2(nearestFood.y - this.y, nearestFood.x - this.x);
-                        targetSpeed = 3.5;
+                        targetSpeed = CONFIG.foodSpeed;
                         
                         // Eat check
                         if (nearestDist < 10) {
@@ -809,15 +811,57 @@
         }
 
         function resize() {
+            const oldWidth = state.width || window.innerWidth;
+            const oldHeight = state.height || window.innerHeight;
+            
             state.width = window.innerWidth;
             state.height = window.innerHeight;
             canvas.width = state.width;
             canvas.height = state.height;
             
-            // Reposition stars on resize
+            // Calculate scale ratios
+            const scaleX = state.width / oldWidth;
+            const scaleY = state.height / oldHeight;
+            
+            // Reposition fish relatively
+            state.fish.forEach(f => {
+                f.x = f.x * scaleX;
+                f.y = f.y * scaleY;
+                // Update trail positions
+                f.trail.forEach(t => {
+                    t.x = t.x * scaleX;
+                    t.y = t.y * scaleY;
+                });
+            });
+            
+            // Reposition food relatively
+            state.food.forEach(p => {
+                p.x = p.x * scaleX;
+                p.y = p.y * scaleY;
+            });
+            
+            // Reposition bubbles relatively
+            state.bubbles.forEach(b => {
+                b.x = b.x * scaleX;
+                b.y = b.y * scaleY;
+            });
+            
+            // Reposition particles relatively
+            state.particles.forEach(p => {
+                p.x = p.x * scaleX;
+                p.y = p.y * scaleY;
+            });
+            
+            // Reposition waves relatively
+            state.waves.forEach(w => {
+                w.x = w.x * scaleX;
+                w.y = w.y * scaleY;
+            });
+            
+            // Reposition stars relatively
             state.stars.forEach(s => {
-                if (s.x > state.width) s.x = Math.random() * state.width;
-                if (s.y > state.height) s.y = Math.random() * state.height * 0.6;
+                s.x = s.x * scaleX;
+                s.y = s.y * scaleY;
             });
         }
 
@@ -904,13 +948,15 @@
             // --- INTERACTION TYPE: TOUCH START ---
             if (e.type === 'mousedown' || e.type === 'touchstart') {
                 if (state.feedingMode) {
-                    // FEEDING
-                    state.food.push(new Pellet(x, y));
-                    playSound('plop'); 
-                    // Create ripples
-                    for(let i=0; i<3; i++) {
-                        const a = (Math.PI*2/3)*i;
-                        state.waves.push(new Wave(x, y, Math.cos(a)*0.4, Math.sin(a)*0.4));
+                    // FEEDING - limit food to max
+                    if (state.food.length < CONFIG.maxFood) {
+                        state.food.push(new Pellet(x, y));
+                        playSound('plop'); 
+                        // Create ripples
+                        for(let i=0; i<3; i++) {
+                            const a = (Math.PI*2/3)*i;
+                            state.waves.push(new Wave(x, y, Math.cos(a)*0.4, Math.sin(a)*0.4));
+                        }
                     }
                 } else {
                     // SCARING/TOUCHING
