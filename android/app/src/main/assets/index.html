@@ -106,17 +106,17 @@
         // --- CONFIGURATION ---
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         const CONFIG = {
-            fishCount: isMobile ? 8 : 20,
+            fishCount: isMobile ? 4 : 20,
             baseSpeed: 1.0,
             fleeSpeed: 9.0,
             fleeRadius: 350,
-            maxBubbles: isMobile ? 8 : 30,
-            maxParticles: isMobile ? 10 : 50,
+            maxBubbles: isMobile ? 2 : 30,
+            maxParticles: isMobile ? 2 : 50,
             renderQuality: isMobile ? 'low' : 'high',
-            targetFPS: isMobile ? 30 : 60,  // Lower frame rate on mobile
+            targetFPS: isMobile ? 18 : 60,  // Lower frame rate on mobile
             enableGradients: !isMobile,      // Disable gradients on mobile
             enableCaustics: !isMobile,       // Disable caustics on mobile
-            enableStars: true,               // Enable stars on all devices for night sky
+            enableStars: !isMobile,          // Disable stars on mobile
             colors: {
                 day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
                 night: { deep: '#000a12', shallow: '#001a24', caustic: 'rgba(100,150,255,0.04)' }
@@ -321,7 +321,7 @@
                 this.wiggle = Math.random() * Math.PI * 2;
                 this.trail = [];
                 // Fewer segments on mobile for performance
-                const trailLen = isMobile ? 9 : 14;
+                const trailLen = isMobile ? 7 : 14;
                 for(let i=0; i<trailLen; i++) this.trail.push({x: this.x, y: this.y});
             }
             }
@@ -563,10 +563,12 @@
 
                 // Body Segments
                 this.trail.forEach((t, i) => {
-                    // Quadratic taper for thinner middle/tail
-                    let tNorm = i / this.trail.length;
-                    let r = this.size * (1 - tNorm * tNorm);
-                    if (i<3) r = this.size; // Head is bigger
+                    // More pronounced fish shape: head big, mid narrows, tail flares
+                    let tNorm = i / (this.trail.length - 1);
+                    let r;
+                    if (i < 2) r = this.size; // Head
+                    else if (tNorm < 0.7) r = this.size * (1 - 0.6 * tNorm); // Body tapers
+                    else r = this.size * (0.4 + 0.3 * Math.sin((tNorm-0.7)/0.3 * Math.PI)); // Tail flares
                     
                     ctx.beginPath();
                     ctx.arc(t.x, t.y, r, 0, Math.PI*2);
@@ -988,8 +990,19 @@
             document.getElementById('btn-audio').classList.toggle('active', desired);
             
             if (desired && !state.audioCtx) initAudio();
-            if (state.audioCtx) desired ? state.audioCtx.resume() : state.audioCtx.suspend();
-            
+            if (state.audioCtx) {
+                if (desired) {
+                    state.audioCtx.resume();
+                    if (state.ambNode && !state.ambNodeStarted) {
+                        try { state.ambNode.start(); state.ambNodeStarted = true; } catch(e){}
+                    }
+                } else {
+                    if (state.ambNode && state.ambNodeStarted) {
+                        try { state.ambNode.stop(); state.ambNodeStarted = false; } catch(e){}
+                    }
+                    state.audioCtx.suspend();
+                }
+            }
             localStorage.setItem('wb_v12_audio', desired);
         }
 
