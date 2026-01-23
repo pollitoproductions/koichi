@@ -423,17 +423,20 @@
                 this.y = Math.random() * state.height;
                 this.angle = Math.random() * Math.PI * 2;
                 this.speed = CONFIG.baseSpeed + Math.random() * 0.5;
-                this.size = 12 + Math.random() * 10;
+                this.size = 14 + Math.random() * 12;  // Increased from 12+10 to 14+12 for longer bodies
                 this.wiggle = Math.random() * 10;
                 
-                // Random Color Assignment
+                // Random Color Assignment - Expanded variety
                 const r = Math.random();
-                if (r < 0.2) { this.col = '#f0f0f0'; this.spots = '#ff4400'; } // Kohaku
-                else if (r < 0.35) { this.col = '#ffaa00'; this.spots = '#ffaa00'; } // Gold
-                else if (r < 0.5) { this.col = '#ffffff'; this.spots = 'tancho'; } // Tancho
-                else if (r < 0.65) { this.col = '#ffdd44'; this.spots = '#222222'; } // Ki Utsuri
-                else if (r < 0.8) { this.col = '#7799aa'; this.spots = '#335566'; } // Asagi
-                else { this.col = '#222222'; this.spots = '#ff4400'; } // Showa
+                if (r < 0.12) { this.col = '#f0f0f0'; this.spots = '#ff4400'; } // Kohaku
+                else if (r < 0.24) { this.col = '#ffaa00'; this.spots = '#ffaa00'; } // Gold
+                else if (r < 0.36) { this.col = '#ffffff'; this.spots = 'tancho'; } // Tancho
+                else if (r < 0.48) { this.col = '#ffdd44'; this.spots = '#222222'; } // Ki Utsuri
+                else if (r < 0.60) { this.col = '#7799aa'; this.spots = '#335566'; } // Asagi
+                else if (r < 0.72) { this.col = '#222222'; this.spots = '#ff4400'; } // Showa
+                else if (r < 0.82) { this.col = '#ffffff'; this.spots = '#ff6600'; } // Orange & White
+                else if (r < 0.90) { this.col = '#ff8844'; this.spots = '#ffffff'; } // Coral
+                else { this.col = '#6688bb'; this.spots = '#ffffff'; } // Blue & White
 
                 // Initialize tail segments (fewer on mobile for performance)
                 const tailSegments = CONFIG.enableGradients ? 10 : 3;  // Further reduced from 4 to 3 for low-end
@@ -601,13 +604,23 @@
                     }
                     ctx.fill();
                     
-                    // Add subtle texture (simple stripes/spots)
+                    // Add enhanced texture (spots and patterns)
                     if (!isShadow && i > 0 && CONFIG.enableFishTexture) {
-                        // Simple dots for texture (very lightweight)
+                        // Multiple texture dots for richer appearance
                         if (i % 2 === 0) {
-                            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
                             ctx.beginPath();
-                            ctx.arc(t.x + r * 0.3, t.y, r * 0.15, 0, Math.PI * 2);
+                            ctx.arc(t.x + r * 0.3, t.y + r * 0.2, r * 0.18, 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.beginPath();
+                            ctx.arc(t.x - r * 0.2, t.y - r * 0.3, r * 0.15, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                        // Add subtle stripe texture
+                        if (i % 3 === 0) {
+                            ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                            ctx.beginPath();
+                            ctx.arc(t.x, t.y + r * 0.4, r * 0.2, 0, Math.PI * 2);
                             ctx.fill();
                         }
                     }
