@@ -106,14 +106,14 @@
         // --- CONFIGURATION ---
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         const CONFIG = {
-            fishCount: isMobile ? 5 : 20,  // Reduced from 8 to 5
+            fishCount: isMobile ? 3 : 20,  // Further reduced from 5 to 3 for low-end devices
             baseSpeed: 1.0,
-            fleeSpeed: isMobile ? 5.0 : 9.0,
-            fleeRadius: 350,
-            foodSpeed: isMobile ? 3.0 : 3.5,
-            maxFood: isMobile ? 10 : 40,  // Reduced from 16 to 10
-            maxBubbles: isMobile ? 5 : 30,  // Reduced from 8 to 5
-            maxParticles: isMobile ? 5 : 50,  // Reduced from 10 to 5
+            fleeSpeed: isMobile ? 4.0 : 9.0,  // Reduced from 5.0 to 4.0
+            fleeRadius: isMobile ? 250 : 350,  // Smaller flee radius on mobile
+            foodSpeed: isMobile ? 2.5 : 3.5,  // Reduced from 3.0 to 2.5
+            maxFood: isMobile ? 8 : 40,  // Further reduced from 10 to 8
+            maxBubbles: isMobile ? 3 : 30,  // Further reduced from 5 to 3
+            maxParticles: isMobile ? 3 : 50,  // Further reduced from 5 to 3
             renderQuality: isMobile ? 'low' : 'high',
             targetFPS: isMobile ? 30 : 60,
             enableGradients: !isMobile,      // Disable gradients on mobile
@@ -121,6 +121,8 @@
             enableStars: !isMobile,          // DISABLE stars on mobile
             enableShadows: !isMobile,        // NEW: Disable shadows on mobile
             enableScales: !isMobile,         // NEW: Disable scale details on mobile
+            enableWaves: !isMobile,          // NEW: Disable wave effects on mobile
+            simplifyPhysics: isMobile        // NEW: Simplify physics calculations on mobile
             colors: {
                 day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
                 night: { deep: '#000a12', shallow: '#001a24', caustic: 'rgba(100,150,255,0.04)' }
@@ -433,7 +435,7 @@
                 else { this.col = '#222222'; this.spots = '#ff4400'; } // Showa
 
                 // Initialize tail segments (fewer on mobile for performance)
-                const tailSegments = CONFIG.enableGradients ? 10 : 4;  // Reduced from 6 to 4
+                const tailSegments = CONFIG.enableGradients ? 10 : 3;  // Further reduced from 4 to 3 for low-end
                 this.trail = [];
                 for(let i=0; i<tailSegments; i++) this.trail.push({x:this.x, y:this.y});
             }
@@ -476,7 +478,7 @@
                             this.wiggle += 10; // Excited wiggle
                             
                             // Create eating particles (fewer on mobile)
-                            const particleCount = CONFIG.enableGradients ? 8 : 3;
+                            const particleCount = CONFIG.enableGradients ? 8 : 2;  // Reduced from 3 to 2
                             for(let i = 0; i < particleCount; i++) {
                                 state.particles.push(new Particle(nearestFood.x, nearestFood.y));
                             }
@@ -484,11 +486,16 @@
                     }
                 }
 
-                // Physics & Movement
+                // Physics & Movement (simplified for low-end devices)
                 let diff = targetAngle - this.angle;
                 // Normalize angle
-                while (diff < -Math.PI) diff += Math.PI * 2;
-                while (diff > Math.PI) diff -= Math.PI * 2;
+                if (CONFIG.simplifyPhysics) {
+                    // Simpler angle normalization
+                    diff = ((diff + Math.PI) % (Math.PI * 2)) - Math.PI;
+                } else {
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+                }
                 
                 const turnRate = isFleeing ? 0.15 : 0.05;
                 this.angle += diff * turnRate;
@@ -607,10 +614,12 @@
                     ctx.fillStyle = 'black';
                     ctx.beginPath(); ctx.arc(4, -this.size*0.6, 2, 0, Math.PI*2); ctx.fill();
                     ctx.beginPath(); ctx.arc(4, this.size*0.6, 2, 0, Math.PI*2); ctx.fill();
-                    // Eye shine
-                    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-                    ctx.beginPath(); ctx.arc(4.5, -this.size*0.6 - 0.5, 0.8, 0, Math.PI*2); ctx.fill();
-                    ctx.beginPath(); ctx.arc(4.5, this.size*0.6 - 0.5, 0.8, 0, Math.PI*2); ctx.fill();
+                    // Eye shine (skip on low-end devices)
+                    if (CONFIG.enableGradients) {
+                        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                        ctx.beginPath(); ctx.arc(4.5, -this.size*0.6 - 0.5, 0.8, 0, Math.PI*2); ctx.fill();
+                        ctx.beginPath(); ctx.arc(4.5, this.size*0.6 - 0.5, 0.8, 0, Math.PI*2); ctx.fill();
+                    }
                     ctx.restore();
                 }
             }
@@ -778,7 +787,7 @@
             if (localStorage.getItem('wb_v12_audio') === 'true') toggleAudio(true);
             
             // Spawn initial bubbles (fewer on mobile)
-            const initialBubbles = CONFIG.maxBubbles;
+            const initialBubbles = isMobile ? 2 : CONFIG.maxBubbles;  // Start with just 2 on mobile
             for(let i = 0; i < initialBubbles; i++) {
                 state.bubbles.push(new Bubble(
                     Math.random() * state.width,
@@ -899,7 +908,7 @@
             }
             
             // Spawn new bubbles randomly (limited for performance)
-            const bubbleSpawnRate = CONFIG.enableGradients ? 0.1 : 0.02;  // Reduced from 0.03 to 0.02
+            const bubbleSpawnRate = CONFIG.enableGradients ? 0.1 : 0.01;  // Further reduced from 0.02 to 0.01
             if (Math.random() < bubbleSpawnRate && state.bubbles.length < CONFIG.maxBubbles) {
                 state.bubbles.push(new Bubble(
                     Math.random() * state.width,
@@ -948,15 +957,20 @@
                 ctx.fillRect(0,0,state.width, state.height);
             }
 
-            // Update & Draw Waves - batch operations
-            for (let i = state.waves.length - 1; i >= 0; i--) {
-                const w = state.waves[i];
-                if (w.age >= w.life) {
-                    state.waves.splice(i, 1);
-                } else {
-                    w.update();
-                    w.draw(ctx);
+            // Update & Draw Waves - batch operations (skip on mobile)
+            if (CONFIG.enableWaves) {
+                for (let i = state.waves.length - 1; i >= 0; i--) {
+                    const w = state.waves[i];
+                    if (w.age >= w.life) {
+                        state.waves.splice(i, 1);
+                    } else {
+                        w.update();
+                        w.draw(ctx);
+                    }
                 }
+            } else {
+                // Clear waves array on mobile to prevent memory buildup
+                if (state.waves.length > 0) state.waves = [];
             }
 
             state.animationId = requestAnimationFrame(loop);
@@ -984,20 +998,24 @@
                     if (state.food.length < CONFIG.maxFood) {
                         state.food.push(new Pellet(x, y));
                         playSound('plop'); 
-                        // Create ripples
-                        for(let i=0; i<3; i++) {
-                            const a = (Math.PI*2/3)*i;
-                            state.waves.push(new Wave(x, y, Math.cos(a)*0.4, Math.sin(a)*0.4));
+                        // Create ripples (skip on mobile)
+                        if (CONFIG.enableWaves) {
+                            for(let i=0; i<3; i++) {
+                                const a = (Math.PI*2/3)*i;
+                                state.waves.push(new Wave(x, y, Math.cos(a)*0.4, Math.sin(a)*0.4));
+                            }
                         }
                     }
                 } else {
                     // SCARING/TOUCHING
                     state.input = {x, y, active: true};
                     playSound('splash'); 
-                    // Create starburst ripples
-                    for(let i=0; i<5; i++) {
-                        const a = (Math.PI/2)*i;
-                        state.waves.push(new Wave(x, y, Math.cos(a), Math.sin(a)));
+                    // Create starburst ripples (skip on mobile)
+                    if (CONFIG.enableWaves) {
+                        for(let i=0; i<5; i++) {
+                            const a = (Math.PI/2)*i;
+                            state.waves.push(new Wave(x, y, Math.cos(a), Math.sin(a)));
+                        }
                     }
                 }
             } 
@@ -1009,12 +1027,14 @@
                     const dist = Math.hypot(dx, dy);
                     state.input.x = x; state.input.y = y;
 
-                    // Only create wake if moving fast enough
+                    // Only create wake if moving fast enough (skip waves on mobile)
                     if (dist > 5) {
-                        const nx = dx/dist, ny = dy/dist;
-                        // Perpendicular waves (Wake)
-                        state.waves.push(new Wave(x, y, -ny, nx));
-                        state.waves.push(new Wave(x, y, ny, -nx));
+                        if (CONFIG.enableWaves) {
+                            const nx = dx/dist, ny = dy/dist;
+                            // Perpendicular waves (Wake)
+                            state.waves.push(new Wave(x, y, -ny, nx));
+                            state.waves.push(new Wave(x, y, ny, -nx));
+                        }
                         
                         // Occasionally play splash sound while dragging
                         if(Math.random()<0.15) playSound('splash');
