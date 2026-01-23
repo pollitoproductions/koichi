@@ -118,10 +118,11 @@
             targetFPS: isMobile ? 30 : 60,
             enableGradients: !isMobile,      // Disable gradients on mobile
             enableCaustics: !isMobile,       // Disable caustics on mobile
-            enableStars: !isMobile,          // DISABLE stars on mobile
+            enableStars: true,               // Enable stars on all devices
             enableShadows: !isMobile,        // NEW: Disable shadows on mobile
             enableScales: !isMobile,         // NEW: Disable scale details on mobile
             enableWaves: !isMobile,          // NEW: Disable wave effects on mobile
+            enableFishTexture: true,         // NEW: Enable simple texture on fish
             simplifyPhysics: isMobile        // NEW: Simplify physics calculations on mobile
             colors: {
                 day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
@@ -600,6 +601,17 @@
                     }
                     ctx.fill();
                     
+                    // Add subtle texture (simple stripes/spots)
+                    if (!isShadow && i > 0 && CONFIG.enableFishTexture) {
+                        // Simple dots for texture (very lightweight)
+                        if (i % 2 === 0) {
+                            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                            ctx.beginPath();
+                            ctx.arc(t.x + r * 0.3, t.y, r * 0.15, 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                    }
+                    
                     // Draw scales (skip shadow, eyes, and on mobile for performance)
                     if (!isShadow && i > 0 && CONFIG.enableScales && CONFIG.renderQuality === 'high') {
                         this.drawScales(ctx, t.x, t.y, r, angle);
@@ -795,9 +807,9 @@
                 ));
             }
             
-            // Create stars for night mode (skip on mobile)
+            // Create stars for night mode
             if (CONFIG.enableStars) {
-                const starCount = isMobile ? 30 : 80;  // Fewer stars on mobile
+                const starCount = isMobile ? 25 : 80;  // Fewer but visible stars on mobile
                 for(let i = 0; i < starCount; i++) {
                     state.stars.push(new Star());
                 }
