@@ -104,11 +104,15 @@
 
     <script>
         // --- CONFIGURATION ---
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         const CONFIG = {
-            fishCount: 20,
+            fishCount: isMobile ? 12 : 20,
             baseSpeed: 1.0,
             fleeSpeed: 9.0,
             fleeRadius: 350,
+            maxBubbles: isMobile ? 15 : 30,
+            maxParticles: isMobile ? 20 : 50,
+            renderQuality: isMobile ? 'low' : 'high',
             colors: {
                 day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
                 night: { deep: '#000a12', shallow: '#001a24', caustic: 'rgba(100,150,255,0.04)' }
@@ -447,8 +451,9 @@
                             playSound('chomp'); // Play new Gulp sound
                             this.wiggle += 10; // Excited wiggle
                             
-                            // Create eating particles
-                            for(let i = 0; i < 8; i++) {
+                            // Create eating particles (fewer on mobile)
+                            const particleCount = CONFIG.renderQuality === 'high' ? 8 : 4;
+                            for(let i = 0; i < particleCount; i++) {
                                 state.particles.push(new Particle(nearestFood.x, nearestFood.y));
                             }
                         }
@@ -493,11 +498,13 @@
                 const body = this.trail[4];
                 const angle = Math.atan2(head.y - body.y, head.x - body.x);
                 
-                // Draw Shadow first
-                ctx.save();
-                ctx.translate(15, 15);
-                this.drawBody(ctx, true, angle);
-                ctx.restore();
+                // Draw Shadow only on high quality
+                if (CONFIG.renderQuality === 'high') {
+                    ctx.save();
+                    ctx.translate(15, 15);
+                    this.drawBody(ctx, true, angle);
+                    ctx.restore();
+                }
 
                 // Draw Fish
                 ctx.save();
@@ -553,8 +560,8 @@
                     }
                     ctx.fill();
                     
-                    // Draw scales (skip shadow and eyes)
-                    if (!isShadow && i > 0) {
+                    // Draw scales (skip shadow, eyes, and on mobile for performance)
+                    if (!isShadow && i > 0 && CONFIG.renderQuality === 'high') {
                         this.drawScales(ctx, t.x, t.y, r, angle);
                     }
                 });
@@ -677,31 +684,36 @@
             ctx.fillStyle = grad;
             ctx.fillRect(0,0,state.width, state.height);
 
-            // Caustics (Light Rays) - Enhanced
+            // Caustics (Light Rays) - Optimized for performance
             ctx.save();
             ctx.globalCompositeOperation = 'overlay';
             const time = t * 0.0003;
-            for(let i = 0; i < 10; i++) {
+            const causticCount = CONFIG.renderQuality === 'high' ? 10 : 5;
+            for(let i = 0; i < causticCount; i++) {
                 const offsetX = Math.sin(time + i * 0.7) * 250;
                 const offsetY = Math.cos(time * 0.7 + i * 0.5) * 180;
                 const size = 120 + Math.sin(time * 0.5 + i)*60;
                 
-                const causticGrad = ctx.createRadialGradient(
-                    cx + offsetX, cy + offsetY, 0,
-                    cx + offsetX, cy + offsetY, size
-                );
-                causticGrad.addColorStop(0, state.nightMode ? 'rgba(100,150,255,0.15)' : 'rgba(255,255,255,0.15)');
-                causticGrad.addColorStop(1, 'rgba(0,0,0,0)');
+                if (CONFIG.renderQuality === 'high') {
+                    const causticGrad = ctx.createRadialGradient(
+                        cx + offsetX, cy + offsetY, 0,
+                        cx + offsetX, cy + offsetY, size
+                    );
+                    causticGrad.addColorStop(0, state.nightMode ? 'rgba(100,150,255,0.15)' : 'rgba(255,255,255,0.15)');
+                    causticGrad.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.fillStyle = causticGrad;
+                } else {
+                    ctx.fillStyle = state.nightMode ? 'rgba(100,150,255,0.08)' : 'rgba(255,255,255,0.08)';
+                }
                 
-                ctx.fillStyle = causticGrad;
                 ctx.beginPath();
                 ctx.ellipse(cx + offsetX, cy + offsetY, size, size * 0.6, time + i, 0, Math.PI * 2);
                 ctx.fill();
             }
             ctx.restore();
             
-            // Subtle sparkles on water surface
-            if (Math.random() < 0.05) {
+            // Subtle sparkles on water surface (high quality only)
+            if (CONFIG.renderQuality === 'high' && Math.random() < 0.05) {
                 const sparkleX = Math.random() * state.width;
                 const sparkleY = Math.random() * state.height;
                 ctx.save();
@@ -724,16 +736,18 @@
             // Restore Audio Preference
             if (localStorage.getItem('wb_v12_audio') === 'true') toggleAudio(true);
             
-            // Spawn initial bubbles
-            for(let i = 0; i < 15; i++) {
+            // Spawn initial bubbles (fewer on mobile)
+            const initialBubbles = CONFIG.renderQuality === 'high' ? 15 : 8;
+            for(let i = 0; i < initialBubbles; i++) {
                 state.bubbles.push(new Bubble(
                     Math.random() * state.width,
                     Math.random() * state.height
                 ));
             }
             
-            // Create stars for night mode
-            for(let i = 0; i < 80; i++) {
+            // Create stars for night mode (fewer on mobile)
+            const starCount = CONFIG.renderQuality === 'high' ? 80 : 40;
+            for(let i = 0; i < starCount; i++) {
                 state.stars.push(new Star());
             }
             
@@ -776,8 +790,9 @@
                 state.stars.forEach(s => { s.update(); s.draw(ctx); });
             }
             
-            // Spawn new bubbles randomly
-            if (Math.random() < 0.1 && state.bubbles.length < 30) {
+            // Spawn new bubbles randomly (limited for performance)
+            const bubbleSpawnRate = CONFIG.renderQuality === 'high' ? 0.1 : 0.05;
+            if (Math.random() < bubbleSpawnRate && state.bubbles.length < CONFIG.maxBubbles) {
                 state.bubbles.push(new Bubble(
                     Math.random() * state.width,
                     state.height + 10
@@ -796,8 +811,8 @@
             const iy = state.input.active ? state.input.y : null;
             state.fish.forEach(f => { f.update(ix, iy); f.draw(ctx); });
 
-            // Update & Draw Particles
-            state.particles = state.particles.filter(p => p.age < p.life);
+            // Update & Draw Particles (limited for performance)
+            state.particles = state.particles.filter(p => p.age < p.life).slice(0, CONFIG.maxParticles);
             state.particles.forEach(p => { p.update(); p.draw(ctx); });
 
             // Water Surface Overlay (Depth effect) with vignette
