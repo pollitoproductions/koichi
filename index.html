@@ -756,10 +756,22 @@
                 if (document.hidden) {
                     state.running = false;
                     cancelAnimationFrame(state.animationId);
-                    if(state.audioCtx) state.audioCtx.suspend();
+                    // Properly stop audio to prevent clicks
+                    if(state.audioCtx) {
+                        state.gainNode.gain.setValueAtTime(state.gainNode.gain.value, state.audioCtx.currentTime);
+                        state.gainNode.gain.exponentialRampToValueAtTime(0.001, state.audioCtx.currentTime + 0.1);
+                        setTimeout(() => {
+                            if(state.audioCtx) state.audioCtx.suspend();
+                        }, 150);
+                    }
                 } else {
                     state.running = true;
-                    if(state.audioEnabled && state.audioCtx) state.audioCtx.resume();
+                    if(state.audioEnabled && state.audioCtx) {
+                        state.audioCtx.resume().then(() => {
+                            state.gainNode.gain.setValueAtTime(0.001, state.audioCtx.currentTime);
+                            state.gainNode.gain.exponentialRampToValueAtTime(0.8, state.audioCtx.currentTime + 0.1);
+                        });
+                    }
                     loop();
                 }
             });
