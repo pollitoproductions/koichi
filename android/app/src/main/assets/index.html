@@ -310,18 +310,20 @@
         
         // Bubble Class
         class Bubble {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.size = 2 + Math.random() * 4;
-                this.speed = 0.5 + Math.random() * 1.5;
-                this.wobble = Math.random() * Math.PI * 2;
-                this.wobbleSpeed = 0.02 + Math.random() * 0.03;
+            constructor() {
+                this.size = 32 + Math.random() * 18;
+                this.x = Math.random() * state.width;
+                this.y = Math.random() * state.height;
+                this.speed = CONFIG.baseSpeed + Math.random() * 0.7;
+                this.angle = Math.random() * Math.PI * 2;
+                this.col = randomColor();
+                this.spots = randomPattern();
+                this.wiggle = Math.random() * Math.PI * 2;
+                this.trail = [];
+                // Fewer segments on mobile for performance
+                const trailLen = isMobile ? 9 : 14;
+                for(let i=0; i<trailLen; i++) this.trail.push({x: this.x, y: this.y});
             }
-            update() {
-                this.y -= this.speed;
-                this.wobble += this.wobbleSpeed;
-                this.x += Math.sin(this.wobble) * 0.5;
             }
             draw(ctx) {
                 if (CONFIG.enableGradients) {
@@ -561,7 +563,9 @@
 
                 // Body Segments
                 this.trail.forEach((t, i) => {
-                    let r = this.size * (1 - i/this.trail.length);
+                    // Quadratic taper for thinner middle/tail
+                    let tNorm = i / this.trail.length;
+                    let r = this.size * (1 - tNorm * tNorm);
                     if (i<3) r = this.size; // Head is bigger
                     
                     ctx.beginPath();
@@ -588,7 +592,8 @@
                     ctx.fill();
                     
                     // Add enhanced texture (spots and patterns)
-                    if (!isShadow && i > 0) {
+                    // Skip all extra texture on mobile for speed
+                    if (!isShadow && i > 0 && !isMobile) {
                         // Multiple texture dots for richer appearance
                         if (i % 2 === 0) {
                             ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
@@ -609,7 +614,7 @@
                     }
                     
                     // Draw scales (skip shadow, eyes, and on mobile for performance)
-                    if (!isShadow && i > 0 && CONFIG.renderQuality === 'high') {
+                    if (!isShadow && i > 0 && CONFIG.renderQuality === 'high' && !isMobile) {
                         this.drawScales(ctx, t.x, t.y, r, angle);
                     }
                 });
