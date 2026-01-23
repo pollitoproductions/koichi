@@ -123,6 +123,7 @@
             food: [],
             bubbles: [],
             particles: [],
+            stars: [],
             input: { x: null, y: null, active: false },
             
             // Flags
@@ -249,6 +250,51 @@
         // ============================================
         // 2. GAME ENTITIES
         // ============================================
+        
+        // Star Class (Night Sky Reflections)
+        class Star {
+            constructor() {
+                this.x = Math.random() * state.width;
+                this.y = Math.random() * state.height * 0.6; // Upper portion
+                this.size = 0.5 + Math.random() * 2;
+                this.twinkleSpeed = 0.02 + Math.random() * 0.03;
+                this.twinklePhase = Math.random() * Math.PI * 2;
+                this.brightness = 0.3 + Math.random() * 0.7;
+            }
+            update() {
+                this.twinklePhase += this.twinkleSpeed;
+            }
+            draw(ctx) {
+                const twinkle = (Math.sin(this.twinklePhase) + 1) / 2;
+                const alpha = this.brightness * twinkle * 0.8;
+                
+                ctx.save();
+                ctx.globalCompositeOperation = 'lighter';
+                
+                // Star glow
+                ctx.shadowBlur = 4 + twinkle * 6;
+                ctx.shadowColor = `rgba(200, 220, 255, ${alpha})`;
+                ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Cross sparkle effect for brighter stars
+                if (this.brightness > 0.6) {
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
+                    ctx.lineWidth = 0.5;
+                    const len = this.size * 3 * twinkle;
+                    ctx.beginPath();
+                    ctx.moveTo(this.x - len, this.y);
+                    ctx.lineTo(this.x + len, this.y);
+                    ctx.moveTo(this.x, this.y - len);
+                    ctx.lineTo(this.x, this.y + len);
+                    ctx.stroke();
+                }
+                
+                ctx.restore();
+            }
+        }
         
         // Bubble Class
         class Bubble {
@@ -506,6 +552,11 @@
                         ctx.fillStyle = grad;
                     }
                     ctx.fill();
+                    
+                    // Draw scales (skip shadow and eyes)
+                    if (!isShadow && i > 0) {
+                        this.drawScales(ctx, t.x, t.y, r, angle);
+                    }
                 });
                 
                 // Eyes
@@ -522,6 +573,32 @@
                     ctx.beginPath(); ctx.arc(4.5, this.size*0.6 - 0.5, 0.8, 0, Math.PI*2); ctx.fill();
                     ctx.restore();
                 }
+            }
+            
+            drawScales(ctx, x, y, radius, fishAngle) {
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(fishAngle);
+                
+                // Draw a pattern of overlapping scale arcs
+                const scaleSize = radius * 0.4;
+                const rows = 2;
+                const cols = 3;
+                
+                for (let row = 0; row < rows; row++) {
+                    for (let col = 0; col < cols; col++) {
+                        const offsetX = (col - 1) * scaleSize * 0.6;
+                        const offsetY = (row - 0.5) * scaleSize * 0.5;
+                        
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                        ctx.lineWidth = 0.5;
+                        ctx.beginPath();
+                        ctx.arc(offsetX, offsetY, scaleSize * 0.5, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                }
+                
+                ctx.restore();
             }
             
             lightenColor(col, percent) {
@@ -655,6 +732,11 @@
                 ));
             }
             
+            // Create stars for night mode
+            for(let i = 0; i < 80; i++) {
+                state.stars.push(new Star());
+            }
+            
             // Background Suspension Logic (Saves battery)
             document.addEventListener("visibilitychange", () => {
                 if (document.hidden) {
@@ -676,12 +758,23 @@
             state.height = window.innerHeight;
             canvas.width = state.width;
             canvas.height = state.height;
+            
+            // Reposition stars on resize
+            state.stars.forEach(s => {
+                if (s.x > state.width) s.x = Math.random() * state.width;
+                if (s.y > state.height) s.y = Math.random() * state.height * 0.6;
+            });
         }
 
         function loop() {
             if (!state.running) return;
             
             drawWater(Date.now());
+            
+            // Draw stars if night mode (before bubbles for depth)
+            if (state.nightMode) {
+                state.stars.forEach(s => { s.update(); s.draw(ctx); });
+            }
             
             // Spawn new bubbles randomly
             if (Math.random() < 0.1 && state.bubbles.length < 30) {
