@@ -84,11 +84,11 @@
             </svg>
         </div>
 
-        <div id="btn-mode" class="btn" title="Toggle Mode">
-            <svg id="icon-water" viewBox="0 0 24 24">
-                <path d="M12 20c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-18C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m0 5c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5z"/>
+        <div id="btn-mode" class="btn active" title="Toggle Mode">
+            <svg id="icon-hand" viewBox="0 0 24 24" style="display:none">
+                <path d="M23 5.5V20c0 2.2-1.8 4-4 4h-7.3c-1.08 0-2.1-.43-2.85-1.19L1 14.83c-.27-.27-.27-.71 0-.98l.59-.59c.27-.27.72-.27.99 0L6 16.7V5c0-.83.67-1.5 1.5-1.5S9 4.17 9 5v6.5h1.5V3c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v8.5H15V4.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v9H19V5.5c0-.83.67-1.5 1.5-1.5S22 4.67 22 5.5z"/>
             </svg>
-            <svg id="icon-food" viewBox="0 0 24 24" style="display:none">
+            <svg id="icon-food" viewBox="0 0 24 24">
                 <path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/>
             </svg>
         </div>
@@ -108,10 +108,12 @@
         const CONFIG = {
             fishCount: isMobile ? 8 : 20,
             baseSpeed: 1.0,
-            fleeSpeed: 9.0,
+            fleeSpeed: isMobile ? 5.0 : 9.0,
             fleeRadius: 350,
             maxBubbles: isMobile ? 8 : 30,
             maxParticles: isMobile ? 10 : 50,
+            maxWaves: isMobile ? 15 : 50,
+            foodDropCooldown: isMobile ? 200 : 0,
             renderQuality: isMobile ? 'low' : 'high',
             targetFPS: isMobile ? 30 : 60,  // Lower frame rate on mobile
             enableGradients: !isMobile,      // Disable gradients on mobile
@@ -133,11 +135,12 @@
             particles: [],
             stars: [],
             input: { x: null, y: null, active: false },
+            lastFoodDrop: 0,
             
             // Flags
             audioEnabled: false,
-            feedingMode: false,
-            nightMode: false,
+            feedingMode: true,
+            nightMode: true,
             running: true,
 
             // Audio Resources
@@ -905,20 +908,29 @@
             if (e.type === 'mousedown' || e.type === 'touchstart') {
                 if (state.feedingMode) {
                     // FEEDING
-                    state.food.push(new Pellet(x, y));
-                    playSound('plop'); 
-                    // Create ripples
-                    for(let i=0; i<3; i++) {
-                        const a = (Math.PI*2/3)*i;
-                        state.waves.push(new Wave(x, y, Math.cos(a)*0.4, Math.sin(a)*0.4));
+                    const now = Date.now();
+                    const maxFood = isMobile ? CONFIG.fishCount * 2 : CONFIG.fishCount * 3;
+                    
+                    // Add cooldown and food limit for mobile optimization
+                    if (now - state.lastFoodDrop >= CONFIG.foodDropCooldown && state.food.length < maxFood) {
+                        state.food.push(new Pellet(x, y));
+                        state.lastFoodDrop = now;
+                        playSound('plop'); 
+                        // Create ripples (fewer on mobile)
+                        const rippleCount = isMobile ? 2 : 3;
+                        for(let i=0; i<rippleCount; i++) {
+                            const a = (Math.PI*2/rippleCount)*i;
+                            state.waves.push(new Wave(x, y, Math.cos(a)*0.4, Math.sin(a)*0.4));
+                        }
                     }
                 } else {
                     // SCARING/TOUCHING
                     state.input = {x, y, active: true};
                     playSound('splash'); 
-                    // Create starburst ripples
-                    for(let i=0; i<5; i++) {
-                        const a = (Math.PI/2)*i;
+                    // Create starburst ripples (fewer on mobile)
+                    const splashCount = isMobile ? 3 : 5;
+                    for(let i=0; i<splashCount; i++) {
+                        const a = (Math.PI*2/splashCount)*i;
                         state.waves.push(new Wave(x, y, Math.cos(a), Math.sin(a)));
                     }
                 }
@@ -932,11 +944,15 @@
                     state.input.x = x; state.input.y = y;
 
                     // Only create wake if moving fast enough
-                    if (dist > 5) {
+                    if (dist > 5 && state.waves.length < CONFIG.maxWaves) {
                         const nx = dx/dist, ny = dy/dist;
-                        // Perpendicular waves (Wake)
-                        state.waves.push(new Wave(x, y, -ny, nx));
-                        state.waves.push(new Wave(x, y, ny, -nx));
+                        // Perpendicular waves (Wake) - single wave on mobile for performance
+                        if (isMobile) {
+                            state.waves.push(new Wave(x, y, -ny, nx));
+                        } else {
+                            state.waves.push(new Wave(x, y, -ny, nx));
+                            state.waves.push(new Wave(x, y, ny, -nx));
+                        }
                         
                         // Occasionally play splash sound while dragging
                         if(Math.random()<0.15) playSound('splash');
@@ -966,7 +982,7 @@
 
         function toggleMode() {
             state.feedingMode = !state.feedingMode;
-            document.getElementById('icon-water').style.display = state.feedingMode ? 'none' : 'block';
+            document.getElementById('icon-hand').style.display = state.feedingMode ? 'none' : 'block';
             document.getElementById('icon-food').style.display = state.feedingMode ? 'block' : 'none';
             document.getElementById('btn-mode').classList.toggle('active', state.feedingMode);
         }
