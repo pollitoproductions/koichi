@@ -2,6 +2,7 @@ package com.pollitoproductions.koichi;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebSettings;
@@ -22,6 +23,9 @@ public class MainActivity extends Activity {
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         );
         
+        // Enable immersive mode
+        enableImmersiveMode();
+        
         // Create and configure WebView
         webView = new WebView(this);
         WebSettings webSettings = webView.getSettings();
@@ -38,6 +42,26 @@ public class MainActivity extends Activity {
         webView.loadUrl("file:///android_asset/index.html");
         
         setContentView(webView);
+    }
+
+    private void enableImmersiveMode() {
+        View decorView = getWindow().getDecorView();
+        decorView.setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+            | View.SYSTEM_UI_FLAG_FULLSCREEN
+        );
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            enableImmersiveMode();
+        }
     }
 
     @Override
@@ -58,6 +82,7 @@ public class MainActivity extends Activity {
             webView.onResume();
             webView.resumeTimers();
         }
+        enableImmersiveMode();
     }
 
     @Override
