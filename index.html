@@ -769,37 +769,32 @@
             draw(ctx) {
                 const prog = this.age / this.life;
                 if (prog >= 1) return;
-                
-                const alpha = 1 - prog;
-                const spread = 20 + (this.age * 2.2);
-                
+                // Boost visibility for mobile
+                const mobileBoost = isMobile ? 1.7 : 1;
+                const alpha = (1 - prog) * (isMobile ? 1.2 : 1);
+                const spread = (20 + (this.age * 2.2)) * mobileBoost;
                 // Perpendicular vectors for width
                 const px = -this.dy * spread; 
                 const py = this.dx * spread;
-                
                 const bright = state.nightMode ? '120, 180, 255' : '220, 255, 255';
                 const dark = state.nightMode ? '0,0,0' : '0,20,40';
-
                 ctx.lineCap = 'round';
-                
                 // Dark trailing edge (Depth)
                 ctx.beginPath();
                 ctx.moveTo(this.x - px - 3, this.y - py + 3);
                 ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x + px - 3, this.y + py + 3);
-                ctx.lineWidth = 10 * alpha;
+                ctx.lineWidth = (10 * alpha) * mobileBoost;
                 ctx.strokeStyle = `rgba(${dark}, ${alpha * 0.3})`;
                 ctx.stroke();
-
                 // Bright leading edge (Highlight)
                 ctx.beginPath();
                 ctx.moveTo(this.x - px, this.y - py);
                 ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x + px, this.y + py);
-                ctx.lineWidth = 5 * alpha;
-                ctx.strokeStyle = `rgba(${bright}, ${alpha * 0.7})`;
-                
+                ctx.lineWidth = (5 * alpha) * mobileBoost;
+                ctx.strokeStyle = `rgba(${bright}, ${alpha * 0.9})`;
                 // Glow effect (skip on mobile)
                 if (CONFIG.enableGradients) {
-                    ctx.shadowBlur = 10; 
+                    ctx.shadowBlur = isMobile ? 18 : 10;
                     ctx.shadowColor = `rgba(${bright}, ${alpha})`;
                 }
                 ctx.stroke(); 
@@ -913,12 +908,7 @@
                     }
                 } else {
                     state.running = true;
-                    if(state.audioEnabled && state.audioCtx) {
-                        state.audioCtx.resume().then(() => {
-                            state.gainNode.gain.setValueAtTime(0.001, state.audioCtx.currentTime);
-                            state.gainNode.gain.exponentialRampToValueAtTime(0.8, state.audioCtx.currentTime + 0.1);
-                        });
-                    }
+                    // Do not auto-resume audio to avoid metallic sound
                     loop();
                 }
             });
@@ -1041,18 +1031,7 @@
             }
 
             // Water Surface Overlay (Depth effect) with vignette (skip on mobile)
-            if (CONFIG.enableGradients) {
-                const vignetteGrad = ctx.createRadialGradient(
-                    state.width/2, state.height/2, state.width * 0.3,
-                    state.width/2, state.height/2, state.width * 0.8
-                );
-                vignetteGrad.addColorStop(0, state.nightMode ? 'rgba(0, 5, 15, 0.1)' : 'rgba(0, 30, 40, 0.05)');
-                vignetteGrad.addColorStop(1, state.nightMode ? 'rgba(0, 5, 15, 0.6)' : 'rgba(0, 30, 40, 0.3)');
-                ctx.fillStyle = vignetteGrad;
-                ctx.fillRect(0,0,state.width, state.height);
-            }
-
-            // Update & Draw Waves - batch operations (skip on mobile)
+            // Update & Draw Waves - batch operations (now before vignette)
             if (CONFIG.enableWaves) {
                 for (let i = state.waves.length - 1; i >= 0; i--) {
                     const w = state.waves[i];
@@ -1066,6 +1045,18 @@
             } else {
                 // Clear waves array on mobile to prevent memory buildup
                 if (state.waves.length > 0) state.waves = [];
+            }
+
+            // Water Surface Overlay (Depth effect) with vignette (skip on mobile)
+            if (CONFIG.enableGradients) {
+                const vignetteGrad = ctx.createRadialGradient(
+                    state.width/2, state.height/2, state.width * 0.3,
+                    state.width/2, state.height/2, state.width * 0.8
+                );
+                vignetteGrad.addColorStop(0, state.nightMode ? 'rgba(0, 5, 15, 0.1)' : 'rgba(0, 30, 40, 0.05)');
+                vignetteGrad.addColorStop(1, state.nightMode ? 'rgba(0, 5, 15, 0.6)' : 'rgba(0, 30, 40, 0.3)');
+                ctx.fillStyle = vignetteGrad;
+                ctx.fillRect(0,0,state.width, state.height);
             }
 
             state.animationId = requestAnimationFrame(loop);
