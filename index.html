@@ -268,7 +268,8 @@
         }
         ctx.restore();
     }
-    // --- ALTERNATING SWERVE LOGIC ---
+
+    // --- ALTERNATING, OCCASIONALLY BACK-AND-FORTH, RANDOM DEGREE SWERVE LOGIC ---
     class Fish {
         constructor() { this.reset(); }
         reset() {
@@ -289,19 +290,42 @@
             }
             this.trail = [];
             for(let i=0; i<10; i++) this.trail.push({x:this.x, y:this.y});
-            this.idleSwerveTimer = 0;
-            this.idleSwerveInterval = this.randomInterval();
-            this.swerveState = undefined;
-            this.turnDirection = Math.random() < 0.5 ? -1 : 1; // start random L or R
+            this.idleMoveTimer = 0;
+            this.idleMoveInterval = this.randomInterval();
+            this.idleTurnState = undefined;
+            this.lastTurnDir = Math.random() < 0.5 ? -1 : 1;
+            this.backForthMode = false;
+            this.bfStep = 0;
         }
-        randomInterval() { return 2 + Math.random(); } // 2-3s for more stable rhythm
+        randomInterval() { return 1 + Math.random() * 2; }
         randomIdleTurn() {
-            // Alternate left and right turns; always switch
-            this.turnDirection *= -1;
-            const deg = 20 + Math.random()*50; // 20-70deg
-            const swerveDuration = 0.7 + Math.random()*0.33; // .7-1.03s
-            // multiply by turnDirection to alternate
-            return { amount: this.turnDirection * deg * Math.PI/180, duration: swerveDuration };
+            let mode;
+            const bf = Math.random();
+            if (bf<0.31 && !this.backForthMode) {
+                this.backForthMode = true;
+                this.bfStep = 0;
+                mode = 0;
+            } else {
+                this.backForthMode = false;
+                if (Math.random() < 0.5) this.lastTurnDir *= -1;
+                mode = this.lastTurnDir;
+            }
+            let deg = 8 + Math.random()*85; // 8-93deg
+            let swerveDuration = 0.6 + Math.random()*0.8; // 0.6-1.4s
+            if (this.backForthMode) {
+                this.bfSeq = [];
+                let bfct = 2 + Math.floor(Math.random()*2); // 2 or 3
+                let bfmag = 17 + Math.random()*37;
+                for(let k=0; k<bfct; ++k) {
+                    this.bfSeq.push({
+                        amount: (k%2===0 ? 1 : -1)*bfmag*Math.PI/180,
+                        duration: 0.23 + Math.random()*0.17
+                    });
+                }
+                this.bfStep = 0;
+                return this.bfSeq[0];
+            }
+            return { amount: mode*deg * Math.PI/180, duration: swerveDuration };
         }
         update(ix, iy, delta=1/60) {
             let speedMul = delta * 60;
@@ -310,27 +334,40 @@
             let isFleeing = false;
             let doWander = (!state.feedingMode && ix == null && iy == null) || (state.feedingMode && state.food.length==0);
             if (doWander) {
-                this.idleSwerveTimer += delta;
-                if (this.idleSwerveTimer > this.idleSwerveInterval || typeof this.swerveState === 'undefined') {
-                    let swv = this.randomIdleTurn();
-                    this.swerveState = {
+                this.idleMoveTimer += delta;
+                if (
+                    this.idleMoveTimer > this.idleMoveInterval || typeof this.idleTurnState === 'undefined' ||
+                    (this.backForthMode && this.idleTurnState?.time >= this.idleTurnState?.duration)
+                ) {
+                    let swv;
+                    if (this.backForthMode && this.bfStep < this.bfSeq.length-1 && this.idleTurnState && this.idleTurnState.time >= this.idleTurnState.duration) {
+                        this.bfStep++;
+                        swv = this.bfSeq[this.bfStep];
+                    } else {
+                        swv = this.randomIdleTurn();
+                    }
+                    this.idleTurnState = {
                         time: 0,
                         total: Math.abs(swv.amount),
                         sign: Math.sign(swv.amount),
                         duration: swv.duration,
                         angleRate: swv.amount / swv.duration
                     };
-                    this.idleSwerveTimer = 0;
-                    this.idleSwerveInterval = this.randomInterval();
+                    if (!this.backForthMode || (this.bfStep===this.bfSeq.length-1)) {
+                        this.idleMoveTimer = 0;
+                        this.idleMoveInterval = this.randomInterval();
+                        this.backForthMode = false;
+                    }
                 }
-                if (this.swerveState && this.swerveState.time < this.swerveState.duration) {
-                    let dt = Math.min(delta, this.swerveState.duration-this.swerveState.time);
-                    targetAngle += this.swerveState.angleRate * dt;
-                    this.swerveState.time += dt;
+                if (this.idleTurnState && this.idleTurnState.time < this.idleTurnState.duration) {
+                    let dt = Math.min(delta, this.idleTurnState.duration-this.idleTurnState.time);
+                    targetAngle += this.idleTurnState.angleRate * dt;
+                    this.idleTurnState.time += dt;
                 }
             } else {
-                this.idleSwerveTimer = 0;
-                this.swerveState = undefined;
+                this.idleMoveTimer = 0;
+                this.idleTurnState = undefined;
+                this.backForthMode = false;
             }
             if (!state.feedingMode && ix !== null) {
                 const dx = this.x - ix;
@@ -468,7 +505,8 @@
             }
         }
     }
-    // --- rest of (unchanged) code as last version ---
+
+    // --- rest of code as before ---
     class Wave {
         constructor(x, y, dx, dy) { this.x = x; this.y = y; this.dx = dx; this.dy = dy; this.age = 0; this.life = 100; }
         update(delta=1/60) {
