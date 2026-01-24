@@ -91,7 +91,6 @@
 </div>
 <canvas id="gameCanvas"></canvas>
 <script>
-// ---------- CONFIG ----------
 const CONFIG = {
     fishCount: 20,
     baseSpeed: 1.0,
@@ -158,37 +157,63 @@ function setupDayBubbles() {
     }
 }
 
-// --- AUDIO ---
-function initAudio() {
-    if (state.audioCtx && state.ambNode) return;
-    try {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        state.audioCtx = state.audioCtx || new AC();
-        state.gainNode = state.gainNode || state.audioCtx.createGain();
-        state.gainNode.gain.value = 0.8; 
-        state.gainNode.connect(state.audioCtx.destination);
+// ---- AUDIO: Fade gain to prevent screetch/pop ----
+function fadeOutGainAndStop(callback) {
+    if (state.gainNode) {
+        try {
+            const now = state.audioCtx && state.audioCtx.currentTime || 0;
+            state.gainNode.gain.cancelScheduledValues(now);
+            state.gainNode.gain.setValueAtTime(state.gainNode.gain.value, now);
+            state.gainNode.gain.linearRampToValueAtTime(0.0, now + 0.19);
+        } catch(e){}
+    }
+    setTimeout(() => {
+        if (callback) callback();
+    }, 200);
+}
 
-        // Stop prev noise if any
-        if (state.ambNode) try { state.ambNode.stop(); } catch(e){}
-        // Make new noise
-        const ambNode = state.audioCtx.createBufferSource();
-        const ambBuf = state.audioCtx.createBuffer(1, state.audioCtx.sampleRate*2, state.audioCtx.sampleRate);
-        const ad = ambBuf.getChannelData(0);
-        let brown = 0;
-        for(let i=0; i<ambBuf.length; i++){
-            const white = Math.random() * 2 - 1;
-            brown = (brown + (0.02 * white)) / 1.02;
-            ad[i] = brown * 4.7;
-        }
-        ambNode.buffer = ambBuf;
-        ambNode.loop = true;
-        const filter = state.audioCtx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.value = 240;
-        ambNode.connect(filter).connect(state.gainNode);
-        ambNode.start(0);
-        state.ambNode = ambNode;
-    } catch(e) { console.warn("Audio Init Failed", e); }
+function initAudio() {
+    // Release old nodes if any
+    if(state.ambNode) {
+        try { state.ambNode.stop(); } catch(e){}
+        state.ambNode = null;
+    }
+    if(state.gainNode) {
+        try { state.gainNode.disconnect(); } catch(e){}
+        state.gainNode = null;
+    }
+    if (!state.audioCtx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        state.audioCtx = new AC();
+    }
+    state.gainNode = state.audioCtx.createGain();
+    state.gainNode.gain.value = 0.8;
+    state.gainNode.connect(state.audioCtx.destination);
+
+    // Create brown noise anew each time
+    const ambNode = state.audioCtx.createBufferSource();
+    const ambBuf = state.audioCtx.createBuffer(1, state.audioCtx.sampleRate*2, state.audioCtx.sampleRate);
+    const ad = ambBuf.getChannelData(0);
+    let brown = 0;
+    for(let i=0; i<ambBuf.length; i++){
+        const white = Math.random() * 2 - 1;
+        brown = (brown + (0.02 * white)) / 1.02;
+        ad[i] = brown * 4.7;
+    }
+    ambNode.buffer = ambBuf;
+    ambNode.loop = true;
+    const filter = state.audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 240;
+    ambNode.connect(filter).connect(state.gainNode);
+    ambNode.start(0);
+    state.ambNode = ambNode;
+    // Fade in
+    try {
+        const now = state.audioCtx.currentTime;
+        state.gainNode.gain.setValueAtTime(0, now);
+        state.gainNode.gain.linearRampToValueAtTime(0.8, now + 0.5);
+    } catch(e){}
 }
 function playSound(type) {
     if (!state.audioEnabled || !state.audioCtx || state.audioCtx.state !== 'running') return;
@@ -364,7 +389,7 @@ class Fish {
     }
 }
 
-// --- Ripples/Waves: High contrast everywhere ---
+// --- Ripples: High contrast everywhere ---
 class Wave {
     constructor(x, y, dx, dy, opts) {
         opts = opts || {};
@@ -410,7 +435,6 @@ class Wave {
     }
 }
 
-// --- DRAW ---
 function drawWater(now) {
     const palette = state.nightMode ? CONFIG.colors.night : CONFIG.colors.day;
     const cx = state.width/2, cy = state.height/2;
@@ -485,7 +509,6 @@ function drawWater(now) {
     }
 }
 
-// --- MAIN LOOP ---
 let dt = 1;
 function loop(now) {
     now = now || performance.now();
@@ -504,7 +527,6 @@ function loop(now) {
     state.animationId = requestAnimationFrame(loop);
 }
 
-// --- INIT ---
 function init() {
     resize();
     for(let i=0; i<CONFIG.fishCount; i++) state.fish.push(new Fish());
@@ -515,12 +537,15 @@ function init() {
         if (document.hidden) {
             state.running = false;
             cancelAnimationFrame(state.animationId);
-            if(state.audioCtx) state.audioCtx.suspend();
-            if(state.ambNode) { try { state.ambNode.stop(); } catch(e){} state.ambNode = null; }
+            // Fade out & stop audio node
+            if(state.gainNode) fadeOutGainAndStop(() => {
+                if(state.ambNode) { try { state.ambNode.stop(); } catch(e){} state.ambNode = null; }
+                if(state.audioCtx) state.audioCtx.suspend();
+            });
         } else {
             state.running = true;
             if(state.audioEnabled && state.audioCtx) state.audioCtx.resume();
-            setTimeout(initAudio, 200); // restart audio and brown noise buffer
+            setTimeout(initAudio, 180); // restart clean brown noise
             state.lastFrameTime = performance.now();
             loop();
         }
@@ -537,7 +562,6 @@ function resize() {
     setupDayBubbles();
 }
 
-// --- INPUT ---
 function handleInput(e) {
     e.preventDefault();
     if (state.audioEnabled && state.audioCtx && state.audioCtx.state === 'suspended')
@@ -597,7 +621,6 @@ function handleInput(e) {
     }
 }
 
-// --- UI BUTTONS ---
 function toggleAudio(force) {
     const desired = force !== undefined ? force : !state.audioEnabled;
     state.audioEnabled = desired;
@@ -619,8 +642,6 @@ function toggleNight() {
     document.getElementById('btn-night').classList.toggle('active', state.nightMode);
     (state.nightMode ? setupNightStars : setupDayBubbles)();
 }
-
-// --- LISTENERS / UI INITS ---
 window.addEventListener('resize', resize);
 ['mousedown', 'mousemove', 'mouseup', 'mouseleave', 'touchstart', 'touchmove', 'touchend']
     .forEach(ev => canvas.addEventListener(ev, handleInput, {passive: false}));
