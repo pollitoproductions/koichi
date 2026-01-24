@@ -104,15 +104,18 @@
 
     <script>
         // --- CONFIGURATION ---
+        // Fish count and speed will be set dynamically
+        // Fish count and speed will be set dynamically
         const CONFIG = {
-            fishCount: 20,
+            fishCount: 12, // default, will be set in init()
             baseSpeed: 1.0,
             fleeSpeed: 9.0,
             fleeRadius: 350,
             colors: {
                 day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
                 night: { deep: '#000a12', shallow: '#001a24', caustic: 'rgba(100,150,255,0.04)' }
-            }
+            },
+            starCount: 18 // for night sky
         };
 
         // --- GLOBAL STATE ---
@@ -122,13 +125,13 @@
             fish: [],
             food: [],
             input: { x: null, y: null, active: false },
-            
+            // Stars for night sky
+            stars: [],
             // Flags
             audioEnabled: false,
             feedingMode: false,
             nightMode: false,
             running: true,
-
             // Audio Resources
             audioCtx: null,
             gainNode: null,
@@ -138,9 +141,36 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d', { alpha: false });
 
+        // Dynamically set fish count and stars based on screen size
+        function dynamicInit() {
+            state.width = window.innerWidth;
+            state.height = window.innerHeight;
+            let area = state.width * state.height;
+            if (area < 400*700) CONFIG.fishCount = 4;
+            else if (area < 700*1000) CONFIG.fishCount = 8;
+            else if (area < 1200*1200) CONFIG.fishCount = 12;
+            else CONFIG.fishCount = 20;
+            // Populate Fish
+            state.fish = [];
+            for(let i=0; i<CONFIG.fishCount; i++) state.fish.push(new Fish());
+            // Generate stars for night sky
+            state.stars = [];
+            for(let i=0; i<CONFIG.starCount; i++) {
+                state.stars.push({
+                    x: Math.random() * state.width,
+                    y: Math.random() * state.height * 0.5,
+                    r: 0.7 + Math.random() * 1.7,
+                    a: 0.5 + Math.random() * 0.5
+                });
+            }
+        }
+
         // ============================================
         // 1. IMPROVED AUDIO ENGINE (SINE WAVE BASED)
         // ============================================
+
+        // Call dynamicInit on load
+        dynamicInit();
         function initAudio() {
             if (state.audioCtx) return;
             try {
@@ -488,18 +518,30 @@
         // ============================================
         // 3. CORE RENDERING & LOOP
         // ============================================
-        
+
         function drawWater(t) {
             const palette = state.nightMode ? CONFIG.colors.night : CONFIG.colors.day;
             const cx = state.width/2, cy = state.height/2;
-            
             // Gradient Background
             const grad = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.max(state.width, state.height));
             grad.addColorStop(0, palette.shallow);
             grad.addColorStop(1, palette.deep);
             ctx.fillStyle = grad;
             ctx.fillRect(0,0,state.width, state.height);
-
+            // Draw stars if night
+            if (state.nightMode && state.stars && state.stars.length > 0) {
+                ctx.save();
+                ctx.globalAlpha = 1.0;
+                for (let s of state.stars) {
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+                    ctx.fillStyle = `rgba(255,255,255,${s.a})`;
+                    ctx.shadowColor = '#fff';
+                    ctx.shadowBlur = 6;
+                    ctx.fill();
+                }
+                ctx.restore();
+            }
             // Caustics (Light Rays)
             ctx.save();
             ctx.globalCompositeOperation = 'overlay';
@@ -518,12 +560,27 @@
 
         function init() {
             resize();
+            // Dynamically set fish count based on screen size
+            let area = state.width * state.height;
+            if (area < 400*700) CONFIG.fishCount = 4;
+            else if (area < 700*1000) CONFIG.fishCount = 8;
+            else if (area < 1200*1200) CONFIG.fishCount = 12;
+            else CONFIG.fishCount = 20;
             // Populate Fish
+            state.fish = [];
             for(let i=0; i<CONFIG.fishCount; i++) state.fish.push(new Fish());
-            
+            // Generate stars for night sky
+            state.stars = [];
+            for(let i=0; i<CONFIG.starCount; i++) {
+                state.stars.push({
+                    x: Math.random() * state.width,
+                    y: Math.random() * state.height * 0.5,
+                    r: 0.7 + Math.random() * 1.7,
+                    a: 0.5 + Math.random() * 0.5
+                });
+            }
             // Restore Audio Preference
             if (localStorage.getItem('wb_v12_audio') === 'true') toggleAudio(true);
-            
             // Background Suspension Logic (Saves battery)
             document.addEventListener("visibilitychange", () => {
                 if (document.hidden) {
@@ -536,7 +593,6 @@
                     loop();
                 }
             });
-
             loop();
         }
 
@@ -547,18 +603,24 @@
             canvas.height = state.height;
         }
 
+        let lastFrameTime = performance.now();
         function loop() {
             if (!state.running) return;
-            
-            drawWater(Date.now());
-            
+            // --- Animation rate normalization ---
+            const now = performance.now();
+            let dt = (now - lastFrameTime) / 16.67; // 16.67ms = 60fps
+            if (dt > 2) dt = 2; // clamp for slow frames
+            lastFrameTime = now;
+
+            drawWater(now);
+
             // Update & Draw Food
             state.food.forEach(f => { f.update(); f.draw(ctx); });
 
             // Update & Draw Fish
             const ix = state.input.active ? state.input.x : null;
             const iy = state.input.active ? state.input.y : null;
-            state.fish.forEach(f => { f.update(ix, iy); f.draw(ctx); });
+            state.fish.forEach(f => { f.update(ix, iy, dt); f.draw(ctx); });
 
             // Water Surface Overlay (Depth effect)
             ctx.fillStyle = state.nightMode ? 'rgba(0, 5, 15, 0.4)' : 'rgba(0, 30, 40, 0.1)';
@@ -589,88 +651,92 @@
             // --- INTERACTION TYPE: TOUCH START ---
             if (e.type === 'mousedown' || e.type === 'touchstart') {
                 if (state.feedingMode) {
-                    // FEEDING
-                    state.food.push(new Pellet(x, y));
-                    playSound('plop'); 
-                    // Create ripples
-                    for(let i=0; i<3; i++) {
-                        const a = (Math.PI*2/3)*i;
-                        state.waves.push(new Wave(x, y, Math.cos(a)*0.4, Math.sin(a)*0.4));
+                    // FEEDING: limit food to double fish count
+                    if (state.food.length < state.fish.length * 2) {
+                        state.food.push(new Pellet(x, y));
+                        playSound('plop');
+                        // Create ripples
+                        for(let i=0; i<3; i++) {
+                            const a = (Math.PI*2/3)*i;
+                            state.waves.push(new Wave(x, y, Math.cos(a)*0.4, Math.sin(a)*0.4));
+                        }
                     }
                 } else {
                     // SCARING/TOUCHING
                     state.input = {x, y, active: true};
-                    playSound('splash'); 
+                    playSound('splash');
                     // Create starburst ripples
                     for(let i=0; i<5; i++) {
                         const a = (Math.PI/2)*i;
                         state.waves.push(new Wave(x, y, Math.cos(a), Math.sin(a)));
                     }
                 }
-            } 
+            }
             // --- INTERACTION TYPE: DRAG ---
             else if (e.type === 'mousemove' || e.type === 'touchmove') {
                 if (!state.feedingMode && state.input.active) {
                     const dx = x - state.input.x;
                     const dy = y - state.input.y;
-                    const dist = Math.hypot(dx, dy);
-                    state.input.x = x; state.input.y = y;
-
-                    // Only create wake if moving fast enough
-                    if (dist > 5) {
-                        const nx = dx/dist, ny = dy/dist;
-                        // Perpendicular waves (Wake)
-                        state.waves.push(new Wave(x, y, -ny, nx));
-                        state.waves.push(new Wave(x, y, ny, -nx));
-                        
-                        // Occasionally play splash sound while dragging
-                        if(Math.random()<0.15) playSound('splash');
+                    update(ix, iy, dt=1) {
+                        let targetAngle = this.angle;
+                        let targetSpeed = CONFIG.baseSpeed;
+                        let isFleeing = false;
+                        // BEHAVIOR 1: Flee from touch (if not feeding)
+                        if (!state.feedingMode && ix !== null) {
+                            const dist = Math.hypot(this.x - ix, this.y - iy);
+                            if (dist < CONFIG.fleeRadius) {
+                                isFleeing = true;
+                                targetAngle = Math.atan2(this.y - iy, this.x - ix);
+                                targetSpeed = CONFIG.fleeSpeed;
+                                // Add randomness to panic
+                                targetAngle += (Math.random()-0.5) * 0.8;
+                            }
+                        }
+                        // BEHAVIOR 2: Seek Food
+                        if (!isFleeing && state.food.length > 0) {
+                            let nearestFood = null;
+                            let nearestDist = 9999;
+                            state.food.forEach(p => {
+                                const d = Math.hypot(p.x - this.x, p.y - this.y);
+                                if(d < nearestDist) { nearestDist = d; nearestFood = p; }
+                            });
+                            // Only notice food within 300px
+                            if (nearestFood && nearestDist < 300) {
+                                targetAngle = Math.atan2(nearestFood.y - this.y, nearestFood.x - this.x);
+                                targetSpeed = 3.5;
+                                // Eat check
+                                if (nearestDist < 10) {
+                                    state.food = state.food.filter(f => f !== nearestFood);
+                                    playSound('chomp'); // Play new Gulp sound
+                                    this.wiggle += 10; // Excited wiggle
+                                }
+                            }
+                        }
+                        // Physics & Movement (dt normalized)
+                        let diff = targetAngle - this.angle;
+                        // Normalize angle
+                        while (diff < -Math.PI) diff += Math.PI * 2;
+                        while (diff > Math.PI) diff -= Math.PI * 2;
+                        const turnRate = (isFleeing ? 0.15 : 0.05) * dt;
+                        this.angle += diff * turnRate;
+                        this.speed += (targetSpeed - this.speed) * 0.05 * dt;
+                        this.x += Math.cos(this.angle) * this.speed * dt;
+                        this.y += Math.sin(this.angle) * this.speed * dt;
+                        // Screen Wrap
+                        const pad = 60;
+                        if(this.x < -pad) this.x = state.width + pad;
+                        if(this.x > state.width + pad) this.x = -pad;
+                        if(this.y < -pad) this.y = state.height + pad;
+                        if(this.y > state.height + pad) this.y = -pad;
+                        // Update Tail (Inverse Kinematics)
+                        this.trail[0] = {x: this.x, y: this.y};
+                        for(let i=1; i<this.trail.length; i++) {
+                            const prev = this.trail[i-1];
+                            const curr = this.trail[i];
+                            const ang = Math.atan2(prev.y - curr.y, prev.x - curr.x);
+                            const segLen = this.size * 0.5;
+                            curr.x = prev.x - Math.cos(ang) * segLen;
+                            curr.y = prev.y - Math.sin(ang) * segLen;
+                        }
+                        this.wiggle += (0.2 + (this.speed * 0.15)) * dt;
                     }
-                }
-            } 
-            else { 
-                state.input.active = false; 
-            }
-        }
-
-        // --- UI BUTTON HANDLERS ---
-        function toggleAudio(force) {
-            const desired = force !== undefined ? force : !state.audioEnabled;
-            state.audioEnabled = desired;
-            
-            // Update Icons
-            document.getElementById('icon-sound-on').style.display = desired ? 'block' : 'none';
-            document.getElementById('icon-sound-off').style.display = desired ? 'none' : 'block';
-            document.getElementById('btn-audio').classList.toggle('active', desired);
-            
-            if (desired && !state.audioCtx) initAudio();
-            if (state.audioCtx) desired ? state.audioCtx.resume() : state.audioCtx.suspend();
-            
-            localStorage.setItem('wb_v12_audio', desired);
-        }
-
-        function toggleMode() {
-            state.feedingMode = !state.feedingMode;
-            document.getElementById('icon-water').style.display = state.feedingMode ? 'none' : 'block';
-            document.getElementById('icon-food').style.display = state.feedingMode ? 'block' : 'none';
-            document.getElementById('btn-mode').classList.toggle('active', state.feedingMode);
-        }
-
-        function toggleNight() {
-            state.nightMode = !state.nightMode;
-            document.getElementById('btn-night').classList.toggle('active', state.nightMode);
-        }
-
-        // Event Listeners
-        window.addEventListener('resize', resize);
-        ['mousedown', 'mousemove', 'mouseup', 'mouseleave', 'touchstart', 'touchmove', 'touchend']
-            .forEach(ev => canvas.addEventListener(ev, handleInput, {passive: false}));
-        
-        document.getElementById('btn-audio').addEventListener('click', (e) => { e.stopPropagation(); toggleAudio(); });
-        document.getElementById('btn-mode').addEventListener('click', (e) => { e.stopPropagation(); toggleMode(); });
-        document.getElementById('btn-night').addEventListener('click', (e) => { e.stopPropagation(); toggleNight(); });
-
-        init();
-    </script>
-</body>
-</html>
