@@ -90,13 +90,13 @@
     </div>
 </div>
 <canvas id="gameCanvas"></canvas>
-
 <script>
+// ---------- CONFIG ----------
 const CONFIG = {
     fishCount: 20,
     baseSpeed: 1.0,
-    fleeSpeed: 7.0,        // Max when fleeing
-    foodSpeed: 4.0,        // Max when seeking food
+    fleeSpeed: 7.0,
+    foodSpeed: 4.0,
     idleSpeedMin: 1.0,
     idleSpeedMax: 2.0,
     fleeRadius: 350,
@@ -106,8 +106,8 @@ const CONFIG = {
     },
     nightStars: 8,
     dayBubbles: 7,
-    dragWaveDist: 36,    // Minimum drag distance for wave spawn
-    maxTouchWaves: 30    // Cap on concurrent touch ripples
+    dragWaveDist: 36,
+    maxTouchWaves: 30
 };
 
 const state = {
@@ -123,6 +123,7 @@ const state = {
     audioCtx: null,
     gainNode: null,
     animationId: null,
+    ambNode: null,
     lastFrameTime: 0,
     nightStars: [],
     bubbles: [],
@@ -133,7 +134,6 @@ const state = {
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d', { alpha: false });
 
-// --- Night Stars / Day Bubbles ---
 function randomInRange(min, max) {
     return Math.random() * (max - min) + min;
 }
@@ -158,16 +158,19 @@ function setupDayBubbles() {
     }
 }
 
-// --- Audio ---
+// --- AUDIO ---
 function initAudio() {
-    if (state.audioCtx) return;
+    if (state.audioCtx && state.ambNode) return;
     try {
         const AC = window.AudioContext || window.webkitAudioContext;
-        state.audioCtx = new AC();
-        state.gainNode = state.audioCtx.createGain();
+        state.audioCtx = state.audioCtx || new AC();
+        state.gainNode = state.gainNode || state.audioCtx.createGain();
         state.gainNode.gain.value = 0.8; 
         state.gainNode.connect(state.audioCtx.destination);
 
+        // Stop prev noise if any
+        if (state.ambNode) try { state.ambNode.stop(); } catch(e){}
+        // Make new noise
         const ambNode = state.audioCtx.createBufferSource();
         const ambBuf = state.audioCtx.createBuffer(1, state.audioCtx.sampleRate*2, state.audioCtx.sampleRate);
         const ad = ambBuf.getChannelData(0);
@@ -184,6 +187,7 @@ function initAudio() {
         filter.frequency.value = 240;
         ambNode.connect(filter).connect(state.gainNode);
         ambNode.start(0);
+        state.ambNode = ambNode;
     } catch(e) { console.warn("Audio Init Failed", e); }
 }
 function playSound(type) {
@@ -225,7 +229,7 @@ function playSound(type) {
     }
 }
 
-// --- Food Pellet ---
+// --- GAME ENTITIES ---
 class Pellet {
     constructor(x, y) {
         this.x = x; this.y = y;
@@ -233,19 +237,12 @@ class Pellet {
         this.targetSize = 4;
         this.age = 0;
     }
-    update(dt) {
-        this.age += dt;
-        if(this.size < this.targetSize) this.size += 0.5 * dt;
-    }
+    update(dt) { this.age += dt; if(this.size < this.targetSize) this.size += 0.5 * dt; }
     draw(ctx) {
         ctx.fillStyle = '#8B4513';
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
-        ctx.fill();
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill();
     }
 }
-
-// --- Fish ---
 class Fish {
     constructor() { this.reset(); }
     reset() {
@@ -266,11 +263,8 @@ class Fish {
         for(let i=0; i<10; i++) this.trail.push({x:this.x, y:this.y});
     }
     update(ix, iy, dt) {
-        let targetAngle = this.angle;
-        let targetSpeed = this.speed;
+        let targetAngle = this.angle, targetSpeed = this.speed;
         let isFleeing = false, isSeekingFood = false;
-
-        // Flee
         if (!state.feedingMode && ix !== null) {
             const dist = Math.hypot(this.x - ix, this.y - iy);
             if (dist < CONFIG.fleeRadius) {
@@ -280,8 +274,6 @@ class Fish {
                 targetAngle += (Math.random()-0.5) * 0.8;
             }
         }
-
-        // Seek food
         if (!isFleeing && state.food.length > 0) {
             let nearestFood = null, nearestDist = 9999;
             state.food.forEach(p => {
@@ -299,26 +291,20 @@ class Fish {
                 }
             }
         }
-
-        // Idle wander 1-2
         if (!isFleeing && !isSeekingFood) {
             if (!this.wanderSeed) this.wanderSeed = Math.random() * 1000;
             let wanderSpeed = 1.5 + Math.sin((performance.now() * 0.00012) + this.wanderSeed) * 0.5;
             targetSpeed = Math.max(CONFIG.idleSpeedMin, Math.min(CONFIG.idleSpeedMax, wanderSpeed));
         }
-
         let diff = targetAngle - this.angle;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff > Math.PI) diff -= Math.PI * 2;
         const turnRate = isFleeing ? 0.15 : 0.05;
         this.angle += diff * turnRate * dt;
         this.speed += (targetSpeed - this.speed) * 0.05 * dt;
-
-        // Clamp per mode
         if (isFleeing)               this.speed = Math.min(this.speed, CONFIG.fleeSpeed);
         else if (isSeekingFood)      this.speed = Math.min(this.speed, CONFIG.foodSpeed);
         else                         this.speed = Math.max(CONFIG.idleSpeedMin, Math.min(this.speed, CONFIG.idleSpeedMax));
-
         this.x += Math.cos(this.angle) * this.speed * dt;
         this.y += Math.sin(this.angle) * this.speed * dt;
         const pad = 60;
@@ -328,8 +314,7 @@ class Fish {
         if(this.y > state.height + pad) this.y = -pad;
         this.trail[0] = {x: this.x, y: this.y};
         for(let i=1; i<this.trail.length; i++) {
-            const prev = this.trail[i-1];
-            const curr = this.trail[i];
+            const prev = this.trail[i-1], curr = this.trail[i];
             const ang = Math.atan2(prev.y - curr.y, prev.x - curr.x);
             const segLen = this.size * 0.5;
             curr.x = prev.x - Math.cos(ang) * segLen;
@@ -338,17 +323,14 @@ class Fish {
         this.wiggle += (0.2 + this.speed * 0.15) * dt;
     }
     draw(ctx) {
-        const head = this.trail[0];
-        const body = this.trail[4];
+        const head = this.trail[0], body = this.trail[4];
         const angle = Math.atan2(head.y - body.y, head.x - body.x);
-        ctx.save();
-        ctx.translate(15, 15); this.drawBody(ctx, true, angle); ctx.restore();
+        ctx.save(); ctx.translate(15, 15); this.drawBody(ctx, true, angle); ctx.restore();
         ctx.save(); this.drawBody(ctx, false, angle); ctx.restore();
     }
     drawBody(ctx, isShadow, angle) {
         ctx.fillStyle = isShadow ? 'rgba(0,0,0,0.4)' : this.col;
-        const finWag = Math.sin(this.wiggle)*0.6;
-        const finS = this.size * 1.3;
+        const finWag = Math.sin(this.wiggle)*0.6, finS = this.size * 1.3;
         ctx.save();
         ctx.translate(this.trail[2].x, this.trail[2].y);
         ctx.rotate(angle);
@@ -364,13 +346,10 @@ class Fish {
         this.trail.forEach((t, i) => {
             let r = this.size * (1 - i/this.trail.length);
             if (i<3) r = this.size;
-            ctx.beginPath();
-            ctx.arc(t.x, t.y, r, 0, Math.PI*2);
-            if (isShadow) { ctx.fillStyle = 'rgba(0,0,0,0.4)'; }
-            else {
-                if (this.spots === 'tancho') ctx.fillStyle = (i === 0) ? '#ff0000' : this.col;
-                else ctx.fillStyle = (i%3===0 || i===0) ? this.col : this.spots;
-            }
+            ctx.beginPath(); ctx.arc(t.x, t.y, r, 0, Math.PI*2);
+            if (isShadow) ctx.fillStyle = 'rgba(0,0,0,0.4)'; 
+            else if (this.spots === 'tancho') ctx.fillStyle = (i === 0) ? '#ff0000' : this.col;
+            else ctx.fillStyle = (i%3===0 || i===0) ? this.col : this.spots;
             ctx.fill();
         });
         if (!isShadow) {
@@ -385,7 +364,7 @@ class Fish {
     }
 }
 
-// --- Ripple/Wave ---
+// --- Ripples/Waves: High contrast everywhere ---
 class Wave {
     constructor(x, y, dx, dy, opts) {
         opts = opts || {};
@@ -406,19 +385,32 @@ class Wave {
         const alpha = (1 - prog) * this.colorAlpha;
         const spread = this.baseSpread + (this.age * 2.2);
         const px = -this.dy * spread, py = this.dx * spread;
-        const bright = state.nightMode ? '120, 180, 255' : '220, 255, 255';
+        const bright = state.nightMode ? '180,220,255' : '255,255,240';
+        const dark = state.nightMode ? '20,32,48' : '40,80,120';
+
         ctx.lineCap = 'round';
+
+        // Contrasty "shadow" edge for depth
         ctx.beginPath();
         ctx.moveTo(this.x - px, this.y - py);
         ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x + px, this.y + py);
-        ctx.lineWidth = 2 * alpha;
-        ctx.strokeStyle = `rgba(${bright}, ${alpha * 0.5})`;
+        ctx.lineWidth = 6 * alpha;
+        ctx.strokeStyle = `rgba(${dark}, ${alpha * (state.nightMode ? 0.29 : 0.21)})`;
+        ctx.shadowBlur = 0;
+        ctx.stroke();
+
+        // Contrasty bright edge
+        ctx.beginPath();
+        ctx.moveTo(this.x - px, this.y - py);
+        ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x + px, this.y + py);
+        ctx.lineWidth = 2.5 * alpha;
+        ctx.strokeStyle = `rgba(${bright}, ${alpha * 0.74})`;
         ctx.shadowBlur = 0;
         ctx.stroke();
     }
 }
 
-// --- Draw ---
+// --- DRAW ---
 function drawWater(now) {
     const palette = state.nightMode ? CONFIG.colors.night : CONFIG.colors.day;
     const cx = state.width/2, cy = state.height/2;
@@ -493,7 +485,7 @@ function drawWater(now) {
     }
 }
 
-// --- Frame-independent Loop ---
+// --- MAIN LOOP ---
 let dt = 1;
 function loop(now) {
     now = now || performance.now();
@@ -501,7 +493,6 @@ function loop(now) {
     state.lastFrameTime = now;
 
     drawWater(now);
-
     state.food.forEach(f => { f.update(dt); f.draw(ctx); });
     const ix = state.input.active ? state.input.x : null;
     const iy = state.input.active ? state.input.y : null;
@@ -510,11 +501,10 @@ function loop(now) {
     ctx.fillRect(0,0,state.width, state.height);
     state.waves = state.waves.filter(w => w.age < w.life);
     state.waves.forEach(w => { w.update(dt); w.draw(ctx); });
-
     state.animationId = requestAnimationFrame(loop);
 }
 
-// --- Initialization ---
+// --- INIT ---
 function init() {
     resize();
     for(let i=0; i<CONFIG.fishCount; i++) state.fish.push(new Fish());
@@ -526,9 +516,11 @@ function init() {
             state.running = false;
             cancelAnimationFrame(state.animationId);
             if(state.audioCtx) state.audioCtx.suspend();
+            if(state.ambNode) { try { state.ambNode.stop(); } catch(e){} state.ambNode = null; }
         } else {
             state.running = true;
             if(state.audioEnabled && state.audioCtx) state.audioCtx.resume();
+            setTimeout(initAudio, 200); // restart audio and brown noise buffer
             state.lastFrameTime = performance.now();
             loop();
         }
@@ -545,7 +537,7 @@ function resize() {
     setupDayBubbles();
 }
 
-// --- Input Handling with drag throttle ---
+// --- INPUT ---
 function handleInput(e) {
     e.preventDefault();
     if (state.audioEnabled && state.audioCtx && state.audioCtx.state === 'suspended')
@@ -562,10 +554,12 @@ function handleInput(e) {
         if (state.feedingMode) {
             state.food.push(new Pellet(x, y));
             playSound('plop');
-            // Fast, tiny food ripples
             for (let i=0; i<2; i++) {
                 const a = Math.PI*i;
-                state.waves.push(new Wave(x, y, Math.cos(a)*0.22, Math.sin(a)*0.22, {life: 20, spread: 6, colorAlpha: 0.6}));
+                state.waves.push(new Wave(
+                    x, y, Math.cos(a)*0.22, Math.sin(a)*0.22,
+                    {life: 20, spread: 6, colorAlpha: 0.8}
+                ));
             }
         } else {
             state.input = {x, y, active: true};
@@ -574,17 +568,15 @@ function handleInput(e) {
             if (activeTouchWaves < CONFIG.maxTouchWaves) {
                 for (let i=0; i<4; i++) {
                     const a = (Math.PI/2)*i;
-                    state.waves.push(new Wave(x, y, Math.cos(a), Math.sin(a), {life: 40, spread: 13, colorAlpha: 0.6}));
+                    state.waves.push(new Wave(x, y, Math.cos(a), Math.sin(a), {life: 40, spread: 13, colorAlpha: 0.8}));
                 }
             }
         }
     }
     else if (e.type === 'mousemove' || e.type === 'touchmove') {
         if (!state.feedingMode && state.input.active) {
-            const prevX = state.lastWaveDragX;
-            const prevY = state.lastWaveDragY;
-            const dx = x - (prevX ?? x);
-            const dy = y - (prevY ?? y);
+            const prevX = state.lastWaveDragX, prevY = state.lastWaveDragY;
+            const dx = x - (prevX ?? x), dy = y - (prevY ?? y);
             const dist = Math.hypot(dx, dy);
             if (dist >= CONFIG.dragWaveDist) {
                 state.lastWaveDragX = x;
@@ -592,8 +584,8 @@ function handleInput(e) {
                 let activeTouchWaves = state.waves.filter(w => w.life >= 40).length;
                 if (activeTouchWaves < CONFIG.maxTouchWaves) {
                     const mdx = dx / dist, mdy = dy / dist;
-                    state.waves.push(new Wave(x, y, -mdy, mdx, {life: 40, spread: 13, colorAlpha: 0.6}));
-                    state.waves.push(new Wave(x, y,  mdy, -mdx, {life: 40, spread: 13, colorAlpha: 0.6}));
+                    state.waves.push(new Wave(x, y, -mdy, mdx, {life: 40, spread: 13, colorAlpha: 0.8}));
+                    state.waves.push(new Wave(x, y,  mdy, -mdx, {life: 40, spread: 13, colorAlpha: 0.8}));
                     if(Math.random()<0.13) playSound('splash');
                 }
             }
@@ -605,7 +597,7 @@ function handleInput(e) {
     }
 }
 
-// --- UI BUTTON HANDLERS ---
+// --- UI BUTTONS ---
 function toggleAudio(force) {
     const desired = force !== undefined ? force : !state.audioEnabled;
     state.audioEnabled = desired;
@@ -628,7 +620,7 @@ function toggleNight() {
     (state.nightMode ? setupNightStars : setupDayBubbles)();
 }
 
-// --- Event Listeners ---
+// --- LISTENERS / UI INITS ---
 window.addEventListener('resize', resize);
 ['mousedown', 'mousemove', 'mouseup', 'mouseleave', 'touchstart', 'touchmove', 'touchend']
     .forEach(ev => canvas.addEventListener(ev, handleInput, {passive: false}));
