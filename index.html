@@ -116,7 +116,7 @@ const state = {
     food: [],
     input: { x: null, y: null, active: false },
     audioEnabled: true,
-    feedingMode: false,
+    feedingMode: true, // Feeding mode active at start!
     nightMode: true,
     running: true,
     audioCtx: null,
@@ -127,7 +127,8 @@ const state = {
     nightStars: [],
     bubbles: [],
     lastWaveDragX: null,
-    lastWaveDragY: null
+    lastWaveDragY: null,
+    lastTouch: {x: null, y: null, time: 0}, // For waves that always scare fish
 };
 
 const canvas = document.getElementById('gameCanvas');
@@ -290,7 +291,22 @@ class Fish {
     update(ix, iy, dt) {
         let targetAngle = this.angle, targetSpeed = this.speed;
         let isFleeing = false, isSeekingFood = false;
-        if (!state.feedingMode && ix !== null) {
+        // Use last active touch location from wave for flee, regardless of input.active
+        let fleeFrom = null;
+        if (!state.feedingMode && state.lastTouch.x !== null && performance.now() - state.lastTouch.time < 1100) {
+            fleeFrom = state.lastTouch;
+        }
+        if (fleeFrom) {
+            const dist = Math.hypot(this.x - fleeFrom.x, this.y - fleeFrom.y);
+            if (dist < CONFIG.fleeRadius) {
+                isFleeing = true;
+                targetAngle = Math.atan2(this.y - fleeFrom.y, this.x - fleeFrom.x);
+                targetSpeed = CONFIG.fleeSpeed;
+                targetAngle += (Math.random()-0.5) * 0.8;
+            }
+        }
+        // Otherwise fallback to UI finger touch fallback as before
+        else if (!state.feedingMode && ix !== null) {
             const dist = Math.hypot(this.x - ix, this.y - iy);
             if (dist < CONFIG.fleeRadius) {
                 isFleeing = true;
@@ -389,14 +405,14 @@ class Fish {
     }
 }
 
-// --- Ripples: High contrast everywhere ---
+// --- Ripples: Extra thick, bright, glowy, highly visible everywhere ---
 class Wave {
     constructor(x, y, dx, dy, opts) {
         opts = opts || {};
         this.x = x; this.y = y; this.dx = dx; this.dy = dy;
         this.age = 0;
         this.life = opts.life !== undefined ? opts.life : 100;
-        this.baseSpread = opts.spread !== undefined ? opts.spread : 20;
+        this.baseSpread = opts.spread !== undefined ? opts.spread : 24;
         this.colorAlpha = opts.colorAlpha !== undefined ? opts.colorAlpha : 1.0;
     }
     update(dt) {
@@ -408,30 +424,37 @@ class Wave {
         const prog = this.age / this.life;
         if (prog >= 1) return;
         const alpha = (1 - prog) * this.colorAlpha;
-        const spread = this.baseSpread + (this.age * 2.2);
+        const spread = this.baseSpread + (this.age * 2.75);
         const px = -this.dy * spread, py = this.dx * spread;
-        const bright = state.nightMode ? '180,220,255' : '255,255,240';
-        const dark = state.nightMode ? '20,32,48' : '40,80,120';
+        const bright = state.nightMode ? '225,250,255' : '255,255,242';
+        const dark = state.nightMode ? '13,18,28' : '40,80,120';
 
         ctx.lineCap = 'round';
 
-        // Contrasty "shadow" edge for depth
+        // Contrasty glow shadow edge below
+        ctx.save();
         ctx.beginPath();
         ctx.moveTo(this.x - px, this.y - py);
         ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x + px, this.y + py);
-        ctx.lineWidth = 6 * alpha;
-        ctx.strokeStyle = `rgba(${dark}, ${alpha * (state.nightMode ? 0.29 : 0.21)})`;
-        ctx.shadowBlur = 0;
+        ctx.lineWidth = 12 * alpha + 1; // extra thick
+        ctx.strokeStyle = `rgba(${dark}, ${alpha * 0.35})`;
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = `rgba(${bright},${alpha*0.055})`;
         ctx.stroke();
+        ctx.restore();
 
-        // Contrasty bright edge
+        // Thick glow bright core
+        ctx.save();
         ctx.beginPath();
         ctx.moveTo(this.x - px, this.y - py);
         ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x + px, this.y + py);
-        ctx.lineWidth = 2.5 * alpha;
-        ctx.strokeStyle = `rgba(${bright}, ${alpha * 0.74})`;
-        ctx.shadowBlur = 0;
+        ctx.lineWidth = 5.5 * alpha + 1.5;
+        ctx.strokeStyle = `rgba(${bright}, ${alpha * 0.98})`;
+        ctx.shadowBlur = 24;
+        ctx.shadowColor = `rgba(${bright},${alpha*0.50})`;
+        ctx.globalAlpha = 1;
         ctx.stroke();
+        ctx.restore();
     }
 }
 
@@ -575,6 +598,10 @@ function handleInput(e) {
     if (e.type === 'mousedown' || e.type === 'touchstart') {
         state.lastWaveDragX = x;
         state.lastWaveDragY = y;
+        // If in wave mode, record last wave point and moment for fish-scaring
+        if (!state.feedingMode) {
+            state.lastTouch = {x, y, time: performance.now()};
+        }
         if (state.feedingMode) {
             state.food.push(new Pellet(x, y));
             playSound('plop');
@@ -582,7 +609,7 @@ function handleInput(e) {
                 const a = Math.PI*i;
                 state.waves.push(new Wave(
                     x, y, Math.cos(a)*0.22, Math.sin(a)*0.22,
-                    {life: 20, spread: 6, colorAlpha: 0.8}
+                    {life: 20, spread: 8, colorAlpha: 0.82}
                 ));
             }
         } else {
@@ -590,9 +617,10 @@ function handleInput(e) {
             playSound('splash');
             let activeTouchWaves = state.waves.filter(w => w.life >= 40).length;
             if (activeTouchWaves < CONFIG.maxTouchWaves) {
+                state.lastTouch = {x, y, time: performance.now()};
                 for (let i=0; i<4; i++) {
                     const a = (Math.PI/2)*i;
-                    state.waves.push(new Wave(x, y, Math.cos(a), Math.sin(a), {life: 40, spread: 13, colorAlpha: 0.8}));
+                    state.waves.push(new Wave(x, y, Math.cos(a), Math.sin(a), {life: 44, spread: 18, colorAlpha: 0.88}));
                 }
             }
         }
@@ -605,11 +633,12 @@ function handleInput(e) {
             if (dist >= CONFIG.dragWaveDist) {
                 state.lastWaveDragX = x;
                 state.lastWaveDragY = y;
+                state.lastTouch = {x, y, time: performance.now()};
                 let activeTouchWaves = state.waves.filter(w => w.life >= 40).length;
                 if (activeTouchWaves < CONFIG.maxTouchWaves) {
                     const mdx = dx / dist, mdy = dy / dist;
-                    state.waves.push(new Wave(x, y, -mdy, mdx, {life: 40, spread: 13, colorAlpha: 0.8}));
-                    state.waves.push(new Wave(x, y,  mdy, -mdx, {life: 40, spread: 13, colorAlpha: 0.8}));
+                    state.waves.push(new Wave(x, y, -mdy, mdx, {life: 44, spread: 18, colorAlpha: 0.88}));
+                    state.waves.push(new Wave(x, y,  mdy, -mdx, {life: 44, spread: 18, colorAlpha: 0.88}));
                     if(Math.random()<0.13) playSound('splash');
                 }
             }
@@ -621,6 +650,7 @@ function handleInput(e) {
     }
 }
 
+// --- UI BUTTONS ---
 function toggleAudio(force) {
     const desired = force !== undefined ? force : !state.audioEnabled;
     state.audioEnabled = desired;
