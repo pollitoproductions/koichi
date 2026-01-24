@@ -105,8 +105,13 @@
     <script>
         // --- CONFIGURATION ---
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        // Responsive fish count
+        let fishCount;
+        if (window.innerWidth < 500) fishCount = 3;
+        else if (window.innerWidth < 900) fishCount = 4;
+        else fishCount = 20;
         const CONFIG = {
-            fishCount: isMobile ? 3 : 20,  // Further reduced from 5 to 3 for low-end devices
+            fishCount,
             baseSpeed: 1.0,
             fleeSpeed: isMobile ? 4.0 : 9.0,  // Reduced from 5.0 to 4.0
             fleeRadius: isMobile ? 250 : 350,  // Smaller flee radius on mobile
@@ -465,7 +470,10 @@
                     const dist = Math.hypot(this.x - ix, this.y - iy);
                     if (dist < CONFIG.fleeRadius) {
                         isFleeing = true;
-                        targetAngle = Math.atan2(this.y - iy, this.x - ix);
+                        // Figure-8 bias: add a sinusoidal offset to the angle
+                        const t = Date.now() * 0.002;
+                        const figure8 = Math.sin(t) * Math.cos(t) * 1.2;
+                        targetAngle = Math.atan2(this.y - iy, this.x - ix) + figure8;
                         targetSpeed = CONFIG.fleeSpeed;
                         // Add randomness to panic
                         targetAngle += (Math.random()-0.5) * 0.8; 
@@ -849,7 +857,7 @@
             
             // Create stars for night mode
             if (CONFIG.enableStars) {
-                const starCount = isMobile ? 40 : 120;  // More visible stars
+                const starCount = isMobile ? 15 : 40;  // Reduced star count
                 for(let i = 0; i < starCount; i++) {
                     state.stars.push(new Star());
                 }
@@ -1050,24 +1058,20 @@
                     if (state.food.length < CONFIG.maxFood) {
                         state.food.push(new Pellet(x, y));
                         playSound('plop'); 
-                        // Create ripples (skip on mobile)
-                        if (CONFIG.enableWaves) {
-                            for(let i=0; i<3; i++) {
-                                const a = (Math.PI*2/3)*i;
-                                state.waves.push(new Wave(x, y, Math.cos(a)*0.4, Math.sin(a)*0.4));
-                            }
+                        // Always create ripples
+                        for(let i=0; i<3; i++) {
+                            const a = (Math.PI*2/3)*i;
+                            state.waves.push(new Wave(x, y, Math.cos(a)*0.4, Math.sin(a)*0.4));
                         }
                     }
                 } else {
                     // SCARING/TOUCHING
                     state.input = {x, y, active: true};
                     playSound('splash'); 
-                    // Create starburst ripples (skip on mobile)
-                    if (CONFIG.enableWaves) {
-                        for(let i=0; i<5; i++) {
-                            const a = (Math.PI/2)*i;
-                            state.waves.push(new Wave(x, y, Math.cos(a), Math.sin(a)));
-                        }
+                    // Always create starburst ripples
+                    for(let i=0; i<5; i++) {
+                        const a = (Math.PI/2)*i;
+                        state.waves.push(new Wave(x, y, Math.cos(a), Math.sin(a)));
                     }
                 }
             } 
