@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Wavebox: Koi Chi v1.0 (Mobile Tweak)</title>
+    <title>Wavebox: Koi Chi v1.1 (Mobile + Enhanced Touch)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <style>
         body, html {
@@ -77,7 +77,6 @@
             height: 42px;
             opacity: 0.92;
         }
-
         @media (max-width: 600px), (max-height: 700px) {
             #ui-layer {
                 top: 6px;
@@ -134,21 +133,23 @@
 </div>
 <canvas id="gameCanvas"></canvas>
 <script>
+const IS_MOBILE = window.innerWidth < 600;
 const CONFIG = {
-    fishCount: window.innerWidth < 600 ? 8 : 15,
-    baseSpeed: window.innerWidth < 600 ? 0.99 : 1.0,
-    fleeSpeed: window.innerWidth < 600 ? 2.99 : 3.0,
-    foodSpeed: window.innerWidth < 600 ? 2.99 : 3.0,
-    idleSpeedMin: window.innerWidth < 600 ? 0.99 : 1.0,
-    idleSpeedMax: window.innerWidth < 600 ? 1.1 : 2.0,
-    fleeRadius: window.innerWidth < 600 ? 150 : 250,
+    fishCount: IS_MOBILE ? 8 : 15,
+    // SPEED: More "coaxable" (less damped, more inertia)
+    baseSpeed: IS_MOBILE ? 0.92 : 1.04,
+    fleeSpeed: IS_MOBILE ? 2.2 : 3.0,
+    foodSpeed: IS_MOBILE ? 1.35 : 2.0,
+    idleSpeedMin: IS_MOBILE ? 0.93 : 1.0,
+    idleSpeedMax: IS_MOBILE ? 1.49 : 2.14,
+    fleeRadius: IS_MOBILE ? 200 : 350,
     colors: {
         day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
         night: { deep: '#000a12', shallow: '#001a24', caustic: 'rgba(100,150,255,0.04)' }
     },
-    nightStars: window.innerWidth < 600 ? 5 : 8,
-    dayBubbles: window.innerWidth < 600 ? 4 : 7,
-    dragWaveDist: window.innerWidth < 600 ? 20 : 36,
+    nightStars: IS_MOBILE ? 5 : 8,
+    dayBubbles: IS_MOBILE ? 4 : 7,
+    dragWaveDist: IS_MOBILE ? 20 : 36,
     maxTouchWaves: 20
 };
 const state = {
@@ -171,6 +172,7 @@ const state = {
     lastWaveDragX: null,
     lastWaveDragY: null,
     lastTouch: {x: null, y: null, time: 0},
+    persistentTouch: false // NEW
 };
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d', { alpha: false });
@@ -195,7 +197,7 @@ function setupDayBubbles() {
         state.bubbles.push({x, y, r, phase, speed, origy: y});
     }
 }
-// ---- AUDIO: Fade gain to prevent screetch/pop ----
+// Audio, Pellets, Wave classes: unchanged from previous!
 function fadeOutGainAndStop(callback) {
     if (state.gainNode) {
         try {
@@ -305,8 +307,9 @@ class Fish {
         this.x = Math.random() * state.width;
         this.y = Math.random() * state.height;
         this.angle = Math.random() * Math.PI * 2;
-        this.speed = CONFIG.baseSpeed + Math.random() * (window.innerWidth < 600 ? 0.2 : 0.5);
-        this.size = (window.innerWidth < 600 ? 8 : 12) + Math.random() * (window.innerWidth < 600 ? 5 : 10);
+        this.speed = CONFIG.baseSpeed + Math.random() * (IS_MOBILE ? 0.34 : 0.5);
+        // MOBILE: make fish a tad bigger than before!
+        this.size = (IS_MOBILE ? 14 : 12) + Math.random() * (IS_MOBILE ? 7 : 10); 
         this.wiggle = Math.random() * 10;
         const r = Math.random();
         if (r < 0.2)      { this.col = '#f0f0f0'; this.spots = '#ff4400'; }
@@ -321,25 +324,33 @@ class Fish {
     update(ix, iy, dt) {
         let targetAngle = this.angle, targetSpeed = this.speed;
         let isFleeing = false, isSeekingFood = false;
+        // New: if persistentTouch we always keep "last touch" as wave location,
+        // otherwise revert to timer model for classic mode.
         let fleeFrom = null;
-        if (!state.feedingMode && state.lastTouch.x !== null && performance.now() - state.lastTouch.time < 1100) {
-            fleeFrom = state.lastTouch;
+        if (!state.feedingMode) {
+            if (state.persistentTouch && state.input.active && ix!==null && iy!==null)
+                fleeFrom = {x:ix, y:iy, time:performance.now()};
+            else if (state.lastTouch.x !== null && performance.now() - state.lastTouch.time < 1100)
+                fleeFrom = state.lastTouch;
         }
         if (fleeFrom) {
             const dist = Math.hypot(this.x - fleeFrom.x, this.y - fleeFrom.y);
             if (dist < CONFIG.fleeRadius) {
                 isFleeing = true;
-                targetAngle = Math.atan2(this.y - fleeFrom.y, this.x - fleeFrom.x);
-                targetSpeed = CONFIG.fleeSpeed;
-                targetAngle += (Math.random()-0.5) * 0.8;
+                // Added: reduce "jitter" for coaxing
+                let jitter = (Math.random()-0.5) * 0.4;
+                targetAngle = Math.atan2(this.y - fleeFrom.y, this.x - fleeFrom.x) + jitter;
+                // Smooth out the motion when being coaxed, so you can do curves and eights
+                targetSpeed = CONFIG.fleeSpeed + 0.5*Math.sin(performance.now()/240 + this.x/77);
             }
-        } else if (!state.feedingMode && ix !== null) {
+        }
+        else if (!state.feedingMode && ix !== null) {
             const dist = Math.hypot(this.x - ix, this.y - iy);
             if (dist < CONFIG.fleeRadius) {
                 isFleeing = true;
-                targetAngle = Math.atan2(this.y - iy, this.x - ix);
-                targetSpeed = CONFIG.fleeSpeed;
-                targetAngle += (Math.random()-0.5) * 0.8;
+                let jitter = (Math.random()-0.5) * 0.4;
+                targetAngle = Math.atan2(this.y - iy, this.x - ix) + jitter;
+                targetSpeed = CONFIG.fleeSpeed + 0.5*Math.sin(performance.now()/260 + this.y/61);
             }
         }
         if (!isFleeing && state.food.length > 0) {
@@ -367,10 +378,12 @@ class Fish {
         let diff = targetAngle - this.angle;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff > Math.PI) diff -= Math.PI * 2;
-        const turnRate = isFleeing ? 0.15 : 0.05;
+        // COAXABLE: smoother/bigger turns when being guided
+        const turnRate = (isFleeing && state.persistentTouch) ? 0.21 : (isFleeing ? 0.12 : 0.05);
         this.angle += diff * turnRate * dt;
-        this.speed += (targetSpeed - this.speed) * 0.05 * dt;
-        if (isFleeing)               this.speed = Math.min(this.speed, CONFIG.fleeSpeed);
+        // Smoother inertia for better figure-8 coaxing!
+        this.speed += (targetSpeed - this.speed) * ((isFleeing && state.persistentTouch) ? 0.12 : 0.05) * dt;
+        if (isFleeing)               this.speed = Math.min(this.speed, CONFIG.fleeSpeed + 0.9);
         else if (isSeekingFood)      this.speed = Math.min(this.speed, CONFIG.foodSpeed);
         else                         this.speed = Math.max(CONFIG.idleSpeedMin, Math.min(this.speed, CONFIG.idleSpeedMax));
         this.x += Math.cos(this.angle) * this.speed * dt;
@@ -393,7 +406,7 @@ class Fish {
     draw(ctx) {
         const head = this.trail[0], body = this.trail[4];
         const angle = Math.atan2(head.y - body.y, head.x - body.x);
-        ctx.save(); ctx.translate(window.innerWidth < 600 ? 10 : 15, window.innerWidth < 600 ? 10 : 15); this.drawBody(ctx, true, angle); ctx.restore();
+        ctx.save(); ctx.translate(IS_MOBILE ? 12 : 15, IS_MOBILE ? 12 : 15); this.drawBody(ctx, true, angle); ctx.restore();
         ctx.save(); this.drawBody(ctx, false, angle); ctx.restore();
     }
     drawBody(ctx, isShadow, angle) {
@@ -609,7 +622,8 @@ function handleInput(e) {
         state.lastWaveDragX = x;
         state.lastWaveDragY = y;
         if (!state.feedingMode) {
-            state.lastTouch = {x, y, time: performance.now()};
+            state.input = {x, y, active: true};
+            state.persistentTouch = true; // PERSIST THE WAVE LOCATION UNTIL RELEASE
         }
         if (state.feedingMode) {
             state.food.push(new Pellet(x, y));
@@ -632,10 +646,13 @@ function handleInput(e) {
                     state.waves.push(new Wave(x, y, Math.cos(a), Math.sin(a), {life: 44, spread: 18, colorAlpha: 0.88}));
                 }
             }
+            // Set persistentTouch = true above
         }
     }
     else if (e.type === 'mousemove' || e.type === 'touchmove') {
         if (!state.feedingMode && state.input.active) {
+            state.input = {x, y, active: true}; // persist as long as you drag
+            state.persistentTouch = true;
             const prevX = state.lastWaveDragX, prevY = state.lastWaveDragY;
             const dx = x - (prevX ?? x), dy = y - (prevY ?? y);
             const dist = Math.hypot(dx, dy);
@@ -653,8 +670,9 @@ function handleInput(e) {
             }
         }
     }
-    else {
+    else { // mouseup/mouseleave/touchend
         state.input.active = false;
+        state.persistentTouch = false; // RELEASE the persistent wave
         state.lastWaveDragX = null; state.lastWaveDragY = null;
     }
 }
