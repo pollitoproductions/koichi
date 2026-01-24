@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Wavebox: Koi Chi v1.0 (Complete)</title>
+    <title>Wavebox: Koi Chi v1.0 (Mobile Tweak)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <style>
         body, html {
             margin: 0;
             padding: 0;
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             background-color: #001e26;
             overflow: hidden;
             touch-action: none;
@@ -19,53 +19,88 @@
         }
         canvas {
             display: block;
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
+            position: absolute;
+            left: 0; top: 0;
         }
         #ui-layer {
             position: absolute;
-            top: 20px;
-            right: 20px;
+            top: 10px;
+            right: 10px;
             z-index: 10;
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 8px;
         }
         .btn {
             background: rgba(0, 40, 50, 0.6);
             border: 1px solid rgba(100, 255, 230, 0.4);
             color: rgba(200, 255, 255, 0.9);
-            width: 48px;
-            height: 48px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
             backdrop-filter: blur(4px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
             transition: all 0.2s ease-out;
             -webkit-tap-highlight-color: transparent;
+            font-size: 1rem;
         }
         .btn:active {
-            transform: scale(0.90);
+            transform: scale(0.92);
             background: rgba(0, 60, 70, 0.8);
         }
         .btn.active {
             background: rgba(100, 255, 230, 0.25);
             border-color: #fff;
-            box-shadow: 0 0 15px rgba(100,255,230,0.4);
+            box-shadow: 0 0 10px rgba(100,255,230,0.35);
             color: #fff;
         }
         .btn svg {
-            width: 24px;
-            height: 24px;
+            width: 20px;
+            height: 20px;
             fill: currentColor;
+        }
+        #lillipad {
+            position: absolute;
+            left: 12px;
+            bottom: 12px;
+            z-index: 6;
+            pointer-events: none;
+        }
+        #lillipad svg {
+            width: 65px;
+            height: 42px;
+            opacity: 0.92;
+        }
+
+        @media (max-width: 600px), (max-height: 700px) {
+            #ui-layer {
+                top: 6px;
+                right: 6px;
+                gap: 6px;
+            }
+            .btn {
+                width: 32px;
+                height: 32px;
+                font-size: 0.9rem;
+            }
+            .btn svg {
+                width: 15px;
+                height: 15px;
+            }
+            #lillipad svg {
+                width: 48px;
+                height: 30px;
+            }
         }
     </style>
 </head>
 <body>
-
 <div id="ui-layer">
     <div id="btn-audio" class="btn" title="Toggle Sound">
         <svg id="icon-sound-off" viewBox="0 0 24 24">
@@ -89,26 +124,33 @@
         </svg>
     </div>
 </div>
+<div id="lillipad">
+  <svg viewBox="0 0 65 42" fill="none">
+    <ellipse cx="32.5" cy="21" rx="30" ry="15" fill="#658b45"/>
+    <path d="M31 20 Q38 7 54 21 Q44 25 31 20 Z" fill="#8fbb5c"/>
+    <ellipse cx="35" cy="18.5" rx="2.4" ry="1.4" fill="#f6e3b6" opacity="0.7"/>
+    <path d="M32.5,21 Q30,25 20,29 Q31,26 32.5,21 Z" fill="#51783b" opacity="0.9"/>
+  </svg>
+</div>
 <canvas id="gameCanvas"></canvas>
 <script>
 const CONFIG = {
-    fishCount: 15,
-    baseSpeed: 1.0,
-    fleeSpeed: 3.0,
-    foodSpeed: 2.0,
-    idleSpeedMin: 1.0,
-    idleSpeedMax: 2.0,
-    fleeRadius: 350,
+    fishCount: window.innerWidth < 600 ? 8 : 15,
+    baseSpeed: window.innerWidth < 600 ? 0.76 : 1.0,
+    fleeSpeed: window.innerWidth < 600 ? 2.4 : 3.0,
+    foodSpeed: window.innerWidth < 600 ? 1.55 : 2.0,
+    idleSpeedMin: window.innerWidth < 600 ? 0.8 : 1.0,
+    idleSpeedMax: window.innerWidth < 600 ? 1.45 : 2.0,
+    fleeRadius: window.innerWidth < 600 ? 180 : 350,
     colors: {
         day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
         night: { deep: '#000a12', shallow: '#001a24', caustic: 'rgba(100,150,255,0.04)' }
     },
-    nightStars: 8,
-    dayBubbles: 7,
-    dragWaveDist: 36,
-    maxTouchWaves: 30
+    nightStars: window.innerWidth < 600 ? 5 : 8,
+    dayBubbles: window.innerWidth < 600 ? 4 : 7,
+    dragWaveDist: window.innerWidth < 600 ? 20 : 36,
+    maxTouchWaves: 20
 };
-
 const state = {
     width: 0, height: 0,
     waves: [],
@@ -116,8 +158,8 @@ const state = {
     food: [],
     input: { x: null, y: null, active: false },
     audioEnabled: true,
-    feedingMode: true, // Feeding mode active at start!
-    nightMode: true,
+    feedingMode: true,
+    nightMode: false,
     running: true,
     audioCtx: null,
     gainNode: null,
@@ -128,15 +170,11 @@ const state = {
     bubbles: [],
     lastWaveDragX: null,
     lastWaveDragY: null,
-    lastTouch: {x: null, y: null, time: 0}, // For waves that always scare fish
+    lastTouch: {x: null, y: null, time: 0},
 };
-
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d', { alpha: false });
-
-function randomInRange(min, max) {
-    return Math.random() * (max - min) + min;
-}
+function randomInRange(min, max) { return Math.random() * (max - min) + min; }
 function setupNightStars() {
     state.nightStars = [];
     for (let i = 0; i < CONFIG.nightStars; i++) {
@@ -157,7 +195,6 @@ function setupDayBubbles() {
         state.bubbles.push({x, y, r, phase, speed, origy: y});
     }
 }
-
 // ---- AUDIO: Fade gain to prevent screetch/pop ----
 function fadeOutGainAndStop(callback) {
     if (state.gainNode) {
@@ -172,9 +209,7 @@ function fadeOutGainAndStop(callback) {
         if (callback) callback();
     }, 200);
 }
-
 function initAudio() {
-    // Release old nodes if any
     if(state.ambNode) {
         try { state.ambNode.stop(); } catch(e){}
         state.ambNode = null;
@@ -190,8 +225,6 @@ function initAudio() {
     state.gainNode = state.audioCtx.createGain();
     state.gainNode.gain.value = 0.8;
     state.gainNode.connect(state.audioCtx.destination);
-
-    // Create brown noise anew each time
     const ambNode = state.audioCtx.createBufferSource();
     const ambBuf = state.audioCtx.createBuffer(1, state.audioCtx.sampleRate*2, state.audioCtx.sampleRate);
     const ad = ambBuf.getChannelData(0);
@@ -209,7 +242,6 @@ function initAudio() {
     ambNode.connect(filter).connect(state.gainNode);
     ambNode.start(0);
     state.ambNode = ambNode;
-    // Fade in
     try {
         const now = state.audioCtx.currentTime;
         state.gainNode.gain.setValueAtTime(0, now);
@@ -254,8 +286,6 @@ function playSound(type) {
         osc.start(t); osc.stop(t + 0.2);
     }
 }
-
-// --- GAME ENTITIES ---
 class Pellet {
     constructor(x, y) {
         this.x = x; this.y = y;
@@ -275,8 +305,8 @@ class Fish {
         this.x = Math.random() * state.width;
         this.y = Math.random() * state.height;
         this.angle = Math.random() * Math.PI * 2;
-        this.speed = CONFIG.baseSpeed + Math.random() * 0.5;
-        this.size = 12 + Math.random() * 10;
+        this.speed = CONFIG.baseSpeed + Math.random() * (window.innerWidth < 600 ? 0.2 : 0.5);
+        this.size = (window.innerWidth < 600 ? 8 : 12) + Math.random() * (window.innerWidth < 600 ? 5 : 10);
         this.wiggle = Math.random() * 10;
         const r = Math.random();
         if (r < 0.2)      { this.col = '#f0f0f0'; this.spots = '#ff4400'; }
@@ -291,7 +321,6 @@ class Fish {
     update(ix, iy, dt) {
         let targetAngle = this.angle, targetSpeed = this.speed;
         let isFleeing = false, isSeekingFood = false;
-        // Use last active touch location from wave for flee, regardless of input.active
         let fleeFrom = null;
         if (!state.feedingMode && state.lastTouch.x !== null && performance.now() - state.lastTouch.time < 1100) {
             fleeFrom = state.lastTouch;
@@ -304,9 +333,7 @@ class Fish {
                 targetSpeed = CONFIG.fleeSpeed;
                 targetAngle += (Math.random()-0.5) * 0.8;
             }
-        }
-        // Otherwise fallback to UI finger touch fallback as before
-        else if (!state.feedingMode && ix !== null) {
+        } else if (!state.feedingMode && ix !== null) {
             const dist = Math.hypot(this.x - ix, this.y - iy);
             if (dist < CONFIG.fleeRadius) {
                 isFleeing = true;
@@ -366,7 +393,7 @@ class Fish {
     draw(ctx) {
         const head = this.trail[0], body = this.trail[4];
         const angle = Math.atan2(head.y - body.y, head.x - body.x);
-        ctx.save(); ctx.translate(15, 15); this.drawBody(ctx, true, angle); ctx.restore();
+        ctx.save(); ctx.translate(window.innerWidth < 600 ? 10 : 15, window.innerWidth < 600 ? 10 : 15); this.drawBody(ctx, true, angle); ctx.restore();
         ctx.save(); this.drawBody(ctx, false, angle); ctx.restore();
     }
     drawBody(ctx, isShadow, angle) {
@@ -404,8 +431,6 @@ class Fish {
         }
     }
 }
-
-// --- Ripples: Extra thick, bright, glowy, highly visible everywhere ---
 class Wave {
     constructor(x, y, dx, dy, opts) {
         opts = opts || {};
@@ -428,22 +453,17 @@ class Wave {
         const px = -this.dy * spread, py = this.dx * spread;
         const bright = state.nightMode ? '225,250,255' : '255,255,242';
         const dark = state.nightMode ? '13,18,28' : '40,80,120';
-
         ctx.lineCap = 'round';
-
-        // Contrasty glow shadow edge below
         ctx.save();
         ctx.beginPath();
         ctx.moveTo(this.x - px, this.y - py);
         ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x + px, this.y + py);
-        ctx.lineWidth = 12 * alpha + 1; // extra thick
+        ctx.lineWidth = 12 * alpha + 1;
         ctx.strokeStyle = `rgba(${dark}, ${alpha * 0.35})`;
         ctx.shadowBlur = 16;
         ctx.shadowColor = `rgba(${bright},${alpha*0.055})`;
         ctx.stroke();
         ctx.restore();
-
-        // Thick glow bright core
         ctx.save();
         ctx.beginPath();
         ctx.moveTo(this.x - px, this.y - py);
@@ -457,7 +477,6 @@ class Wave {
         ctx.restore();
     }
 }
-
 function drawWater(now) {
     const palette = state.nightMode ? CONFIG.colors.night : CONFIG.colors.day;
     const cx = state.width/2, cy = state.height/2;
@@ -466,7 +485,6 @@ function drawWater(now) {
     grad.addColorStop(1, palette.deep);
     ctx.fillStyle = grad;
     ctx.fillRect(0,0,state.width, state.height);
-
     ctx.save();
     ctx.globalCompositeOperation = 'overlay';
     ctx.fillStyle = palette.caustic;
@@ -480,7 +498,6 @@ function drawWater(now) {
         ctx.fill();
     }
     ctx.restore();
-
     if (state.nightMode) {
         ctx.save();
         for(const star of state.nightStars) {
@@ -531,13 +548,11 @@ function drawWater(now) {
         ctx.restore();
     }
 }
-
 let dt = 1;
 function loop(now) {
     now = now || performance.now();
     dt = Math.min((now - state.lastFrameTime) / 16.67, 2.5);
     state.lastFrameTime = now;
-
     drawWater(now);
     state.food.forEach(f => { f.update(dt); f.draw(ctx); });
     const ix = state.input.active ? state.input.x : null;
@@ -549,7 +564,6 @@ function loop(now) {
     state.waves.forEach(w => { w.update(dt); w.draw(ctx); });
     state.animationId = requestAnimationFrame(loop);
 }
-
 function init() {
     resize();
     for(let i=0; i<CONFIG.fishCount; i++) state.fish.push(new Fish());
@@ -560,7 +574,6 @@ function init() {
         if (document.hidden) {
             state.running = false;
             cancelAnimationFrame(state.animationId);
-            // Fade out & stop audio node
             if(state.gainNode) fadeOutGainAndStop(() => {
                 if(state.ambNode) { try { state.ambNode.stop(); } catch(e){} state.ambNode = null; }
                 if(state.audioCtx) state.audioCtx.suspend();
@@ -568,7 +581,7 @@ function init() {
         } else {
             state.running = true;
             if(state.audioEnabled && state.audioCtx) state.audioCtx.resume();
-            setTimeout(initAudio, 180); // restart clean brown noise
+            setTimeout(initAudio, 180);
             state.lastFrameTime = performance.now();
             loop();
         }
@@ -584,21 +597,17 @@ function resize() {
     setupNightStars();
     setupDayBubbles();
 }
-
 function handleInput(e) {
     e.preventDefault();
     if (state.audioEnabled && state.audioCtx && state.audioCtx.state === 'suspended')
         state.audioCtx.resume();
-
     const touches = e.changedTouches ? e.changedTouches : [e];
     const t = touches[0];
     const x = t.clientX;
     const y = t.clientY;
-
     if (e.type === 'mousedown' || e.type === 'touchstart') {
         state.lastWaveDragX = x;
         state.lastWaveDragY = y;
-        // If in wave mode, record last wave point and moment for fish-scaring
         if (!state.feedingMode) {
             state.lastTouch = {x, y, time: performance.now()};
         }
@@ -649,8 +658,6 @@ function handleInput(e) {
         state.lastWaveDragX = null; state.lastWaveDragY = null;
     }
 }
-
-// --- UI BUTTONS ---
 function toggleAudio(force) {
     const desired = force !== undefined ? force : !state.audioEnabled;
     state.audioEnabled = desired;
@@ -682,7 +689,7 @@ document.getElementById('icon-water').style.display = state.feedingMode ? 'none'
 document.getElementById('icon-food').style.display = state.feedingMode ? 'block' : 'none';
 document.getElementById('btn-mode').classList.toggle('active', state.feedingMode);
 document.getElementById('btn-night').classList.toggle('active', state.nightMode);
-
+document.getElementById('lillipad').style.display = "block";
 init();
 </script>
 </body>
