@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Wavebox: Koi Chi (Mobile & Calmer Classic Food Seek)</title>
+    <title>Wavebox: Koi Chi (Mobile, Wide Food Attraction, Figure-8 Seek)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <style>
         body, html {
@@ -138,10 +138,12 @@ const CONFIG = {
     fishCount: IS_MOBILE ? 8 : 15,
     baseSpeed: 1.0,
     fleeSpeed: 5.5,
-    foodSpeed: 2.7,
+    foodSpeed: 3.9,                        // Fast enough for nice arcs & figure-8s
     idleSpeedMin: IS_MOBILE ? 0.9 : 1.0,
     idleSpeedMax: IS_MOBILE ? 1.25 : 1.6,
     fleeRadius: IS_MOBILE ? 200 : 350,
+    foodDetectRadius: 700,                 // Detect food from even farther away (was 300)
+    foodSwitchRadius: 120,                 // When close enough, can switch target pellet
     colors: {
         day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
         night: { deep: '#000a12', shallow: '#001a24', caustic: 'rgba(100,150,255,0.04)' }
@@ -196,7 +198,8 @@ function setupDayBubbles() {
         state.bubbles.push({x, y, r, phase, speed, origy: y});
     }
 }
-// --- AUDIO/PELLET/WAVE: UNCHANGED ---
+// AUDIO, Pellet, Wave unchanged...
+
 function fadeOutGainAndStop(callback) {
     if (state.gainNode) {
         try {
@@ -332,16 +335,23 @@ class Fish {
                 targetAngle += (Math.random()-0.5) * 0.8;
             }
         }
+        // Figure-8/chain seeking: “see” food much farther away
         if (!isFleeing && state.food.length > 0) {
-            let nearestFood = null, nearestDist = 9999;
+            let nearestFood = null, nearestDist = 99999;
             state.food.forEach(p => {
                 const d = Math.hypot(p.x - this.x, p.y - this.y);
-                if(d < nearestDist) { nearestDist = d; nearestFood = p; }
+                // Detect from far away, so fish will always start seeking
+                if(d < nearestDist &&
+                   d < CONFIG.foodDetectRadius) { // wider than display!
+                    nearestDist = d; nearestFood = p;
+                }
             });
-            if (nearestFood && nearestDist < 300) {
+            // If we're circling and happen to get close to another pellet, “switch” target
+            if (nearestFood && nearestDist < CONFIG.foodDetectRadius) {
                 targetAngle = Math.atan2(nearestFood.y - this.y, nearestFood.x - this.x);
                 targetSpeed = CONFIG.foodSpeed;
-                if (nearestDist < 10) {
+                // “Chomp” from a little farther out so circle pattern happens as another pellet appears
+                if (nearestDist < CONFIG.foodSwitchRadius) {
                     state.food = state.food.filter(f => f !== nearestFood);
                     playSound('chomp');
                     this.wiggle += 10;
