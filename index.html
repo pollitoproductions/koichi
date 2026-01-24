@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Koi Chi - Mobile, Figure-8, Random Turns, Lillipad Swim Under</title>
+    <title>Koi Chi - Mobile, Figure-8, Random Turns, Lillipad Under, Continuous Wake</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <style>
         body, html {
@@ -70,7 +70,7 @@
             position: absolute;
             left: 12px;
             bottom: 12px;
-            z-index: 2; /* Lillipad above canvas, below UI */
+            z-index: 2;
             pointer-events: none;
         }
         #lillipad svg {
@@ -126,7 +126,6 @@
     </div>
 </div>
 <div id="lillipad">
-  <!-- Lillipad SVG is below canvas, so fish swim under it -->
   <svg viewBox="0 0 65 42" fill="none">
     <ellipse cx="32.5" cy="21" rx="30" ry="15" fill="#658b45"/>
     <path d="M31 20 Q38 7 54 21 Q44 25 31 20 Z" fill="#8fbb5c"/>
@@ -205,6 +204,8 @@ function setupDayBubbles() {
         state.bubbles.push({x, y, r, phase, speed, origy: y});
     }
 }
+// AUDIO, Pellet, Wave unchanged...
+
 function fadeOutGainAndStop(callback) {
     if (state.gainNode) {
         try {
@@ -358,7 +359,6 @@ class Fish {
                 targetAngle += (Math.random()-0.5) * 0.8;
             }
         }
-        // Figure-8/chain seeking: “see” food much farther away
         if (!isFleeing && state.food.length > 0) {
             let nearestFood = null, nearestDist = 99999;
             state.food.forEach(p => {
@@ -569,6 +569,7 @@ function loop(now) {
     ctx.fillRect(0,0,state.width, state.height);
     state.waves = state.waves.filter(w => w.age < w.life);
     state.waves.forEach(w => { w.update(dt); w.draw(ctx); });
+    // --- CONTINUOUS RIPPLE WHILE TOUCH/DRAG - RESTORED ---
     if (!state.feedingMode && state.input.active) {
         let tNow = performance.now();
         if (!state.lastWaveAdded || (tNow - state.lastWaveAdded > 25)) {
@@ -579,6 +580,7 @@ function loop(now) {
                 dy = state.lastWaveDragX-x;
                 let mag = Math.hypot(dx,dy)||1; dx/=mag;dy/=mag;
             }
+            // The following line ensures the waves are added continuously
             state.waves.push(new Wave(x, y, dx, dy, {life: 44, spread: 18, colorAlpha: 0.88}));
             state.lastWaveDragX = x;
             state.lastWaveDragY = y;
