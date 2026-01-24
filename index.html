@@ -49,275 +49,190 @@
             cursor: pointer;
             backdrop-filter: blur(4px);
             box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-            <!DOCTYPE html>
-            <html lang="en">
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Koichi Fish Pond</title>
-                <style>
-                    body {
-                        margin: 0;
-                        overflow: hidden;
-                        background: #222;
-                    }
-                    canvas {
-                        display: block;
-                    }
-                    #ui {
-                        position: absolute;
-                        top: 10px;
-                        left: 10px;
-                        z-index: 10;
-                        color: #fff;
-                        font-family: sans-serif;
-                        user-select: none;
-                    }
-                    .icon {
-                        width: 32px;
-                        height: 32px;
-                        margin-right: 8px;
-                        vertical-align: middle;
-                        cursor: pointer;
-                    }
-                    .active {
-                        filter: drop-shadow(0 0 6px #fff);
-                    }
-                </style>
-            </head>
-            <body>
-                <div id="ui">
-                    <img id="feedIcon" class="icon active" src="https://img.icons8.com/ios-filled/50/ffffff/fish-food.png" title="Feed"/>
-                    <img id="touchIcon" class="icon" src="https://img.icons8.com/ios-filled/50/ffffff/hand.png" title="Touch"/>
-                </div>
-                <canvas id="pond"></canvas>
-                <script>
-                    const canvas = document.getElementById('pond');
-                    const ctx = canvas.getContext('2d');
-                    let width = window.innerWidth;
-                    let height = window.innerHeight;
-                    canvas.width = width;
-                    canvas.height = height;
+            transition: all 0.2s ease-out;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .btn:active { 
+            transform: scale(0.90); 
+            background: rgba(0, 60, 70, 0.8);
+        }
+        
+        .btn.active { 
+            background: rgba(100, 255, 230, 0.25); 
+            border-color: #fff; 
+            box-shadow: 0 0 15px rgba(100,255,230,0.4); 
+            color: #fff;
+        }
+        
+        .btn svg { 
+            width: 24px; 
+            height: 24px; 
+            fill: currentColor; 
+        }
+    </style>
+</head>
+<body>
 
-                    // Night mode state (start in night mode)
-                    let night = true;
+    <div id="ui-layer">
+        <div id="btn-audio" class="btn" title="Toggle Sound">
+            <svg id="icon-sound-off" viewBox="0 0 24 24">
+                <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73 4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+            </svg>
+            <svg id="icon-sound-on" viewBox="0 0 24 24" style="display:none">
+                <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+            </svg>
+        </div>
 
-                    // UI
-                    const feedIcon = document.getElementById('feedIcon');
-                    const touchIcon = document.getElementById('touchIcon');
-                    let mode = 'feed';
-                    feedIcon.onclick = () => { mode = 'feed'; feedIcon.classList.add('active'); touchIcon.classList.remove('active'); };
-                    touchIcon.onclick = () => { mode = 'touch'; touchIcon.classList.add('active'); feedIcon.classList.remove('active'); };
+        <div id="btn-mode" class="btn" title="Toggle Mode">
+            <svg id="icon-water" viewBox="0 0 24 24">
+                <path d="M12 20c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-18C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m0 5c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5z"/>
+            </svg>
+            <svg id="icon-food" viewBox="0 0 24 24" style="display:none">
+                <path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/>
+            </svg>
+        </div>
 
-                    // Fish count scales with screen size
-                    function getFishCount() {
-                        const minFish = 4, maxFish = 20;
-                        // Use diagonal as a proxy for screen size
-                        const diag = Math.sqrt(width*width + height*height);
-                        // 400px diagonal = 4 fish, 2000px = 20 fish
-                        return Math.round(
-                            minFish + (maxFish-minFish) * Math.min(1, Math.max(0, (diag-400)/(2000-400)))
-                        );
-                    }
+        <div id="btn-night" class="btn" title="Toggle Day/Night">
+            <svg viewBox="0 0 24 24">
+                <path d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27 C17.45,17.19,14.93,19,12,19c-3.86,0-7-3.14-7-7C5,9.06,6.81,6.54,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9 c0-0.46-0.04-0.92-0.1-1.36c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4 C12.92,3.04,12.46,3,12,3L12,3z"/>
+            </svg>
+        </div>
+    </div>
 
-                    let FISH_COUNT = getFishCount();
-                    let fish = [];
-                    function createFish() {
-                        fish = [];
-                        for (let i = 0; i < FISH_COUNT; i++) {
-                            fish.push({
-                                x: Math.random() * width,
-                                y: Math.random() * height,
-                                vx: (Math.random() - 0.5) * 4,
-                                vy: (Math.random() - 0.5) * 4,
-                                size: 24 + Math.random() * 16,
-                                color: `hsl(${Math.random()*360},70%,60%)`,
-                                hungry: true
-                            });
-                        }
-                    }
-                    createFish();
+    <canvas id="gameCanvas"></canvas>
 
-                    // Food
-                    const food = [];
+    <script>
+        // --- CONFIGURATION ---
+        const CONFIG = {
+            fishCount: 20,
+            baseSpeed: 1.0,
+            fleeSpeed: 9.0,
+            fleeRadius: 350,
+            colors: {
+                day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
+                night: { deep: '#000a12', shallow: '#001a24', caustic: 'rgba(100,150,255,0.04)' }
+            }
+        };
 
-                    // Stars for night, bubbles for day
-                    const stars = Array.from({length: 20}, () => ({
-                        x: Math.random(),
-                        y: Math.random(),
-                        twinkle: Math.random(),
-                        phase: Math.random()*Math.PI*2
-                    }));
-                    const bubbles = Array.from({length: 10}, () => ({
-                        x: Math.random(),
-                        y: Math.random(),
-                        r: 6+Math.random()*8,
-                        speed: 0.5+Math.random()*1.5,
-                        phase: Math.random()*Math.PI*2
-                    }));
+        // --- GLOBAL STATE ---
+        const state = {
+            width: 0, height: 0,
+            waves: [],
+            fish: [],
+            food: [],
+            input: { x: null, y: null, active: false },
+            
+            // Flags
+            audioEnabled: false,
+            feedingMode: false,
+            nightMode: false,
+            running: true,
 
-                    // Animation helpers
-                    function drawFish(f) {
-                        ctx.save();
-                        ctx.translate(f.x, f.y);
-                        ctx.rotate(Math.atan2(f.vy, f.vx));
-                        ctx.beginPath();
-                        ctx.ellipse(0, 0, f.size, f.size/2, 0, 0, Math.PI*2);
-                        ctx.fillStyle = f.color;
-                        ctx.shadowColor = '#0008';
-                        ctx.shadowBlur = 8;
-                        ctx.fill();
-                        ctx.shadowBlur = 0;
-                        // Tail
-                        ctx.beginPath();
-                        ctx.moveTo(-f.size, 0);
-                        ctx.lineTo(-f.size-10, -8);
-                        ctx.lineTo(-f.size-10, 8);
-                        ctx.closePath();
-                        ctx.fillStyle = '#fff6';
-                        ctx.fill();
-                        ctx.restore();
-                    }
+            // Audio Resources
+            audioCtx: null,
+            gainNode: null,
+            animationId: null
+        };
 
-                    function drawFood(p) {
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.arc(p.x, p.y, 6, 0, Math.PI*2);
-                        ctx.fillStyle = '#ffb347';
-                        ctx.shadowColor = '#fff8';
-                        ctx.shadowBlur = 6;
-                        ctx.fill();
-                        ctx.restore();
-                    }
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
 
-                    function drawStars() {
-                        for (const s of stars) {
-                            const tw = 0.5 + 0.5*Math.sin(Date.now()/700 + s.phase);
-                            ctx.save();
-                            ctx.globalAlpha = 0.5 + 0.5*tw;
-                            ctx.beginPath();
-                            ctx.arc(s.x*width, s.y*height*0.5, 1.2+tw*1.5, 0, Math.PI*2);
-                            ctx.fillStyle = '#fff';
-                            ctx.shadowColor = '#fff';
-                            ctx.shadowBlur = 8*tw;
-                            ctx.fill();
-                            ctx.restore();
-                        }
-                    }
+        // ============================================
+        // 1. IMPROVED AUDIO ENGINE (SINE WAVE BASED)
+        // ============================================
+        function initAudio() {
+            if (state.audioCtx) return;
+            try {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                state.audioCtx = new AC();
+                state.gainNode = state.audioCtx.createGain();
+                state.gainNode.gain.value = 0.8; 
+                state.gainNode.connect(state.audioCtx.destination);
 
-                    function drawBubbles() {
-                        for (const b of bubbles) {
-                            ctx.save();
-                            ctx.globalAlpha = 0.3 + 0.3*Math.sin(Date.now()/900 + b.phase);
-                            ctx.beginPath();
-                            ctx.arc(b.x*width, b.y*height, b.r, 0, Math.PI*2);
-                            ctx.strokeStyle = '#fff';
-                            ctx.lineWidth = 2;
-                            ctx.stroke();
-                            ctx.restore();
-                        }
-                    }
+                // BACKGROUND DRONE (Underwater Ambience)
+                // We create a buffer filled with filtered noise to sound like deep water
+                const ambNode = state.audioCtx.createBufferSource();
+                const ambBuf = state.audioCtx.createBuffer(1, state.audioCtx.sampleRate*2, state.audioCtx.sampleRate);
+                const ad = ambBuf.getChannelData(0);
+                let lastOut = 0;
+                for(let i=0; i<ambBuf.length; i++){
+                    const white = Math.random() * 2 - 1;
+                    // Low pass filtering the noise manually
+                    ad[i] = (lastOut + (0.02 * white)) / 1.02;
+                    lastOut = ad[i];
+                    ad[i] *= 3.5; // Boost volume
+                }
+                ambNode.buffer = ambBuf;
+                ambNode.loop = true;
 
-                    // Main loop
-                    function animate() {
-                        ctx.clearRect(0, 0, width, height);
-                        // Background
-                        ctx.fillStyle = night ? '#111a28' : '#4ec6f9';
-                        ctx.fillRect(0, 0, width, height);
+                // Further filter the drone
+                const filter = state.audioCtx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 400;
 
-                        // Stars or bubbles
-                        if (night) {
-                            drawStars();
-                        } else {
-                            // Animate bubbles upward
-                            for (const b of bubbles) {
-                                b.y -= b.speed/height*2;
-                                if (b.y < -0.05) {
-                                    b.y = 1.05;
-                                    b.x = Math.random();
-                                    b.r = 6+Math.random()*8;
-                                    b.speed = 0.5+Math.random()*1.5;
-                                    b.phase = Math.random()*Math.PI*2;
-                                }
-                            }
-                            drawBubbles();
-                        }
+                ambNode.connect(filter).connect(state.gainNode);
+                ambNode.start(0);
+            } catch(e) { console.warn("Audio Init Failed", e); }
+        }
 
-                        // Fish
-                        for (const f of fish) {
-                            // Move
-                            f.x += f.vx;
-                            f.y += f.vy;
-                            // Limit speed
-                            const speed = Math.sqrt(f.vx*f.vx + f.vy*f.vy);
-                            if (speed > 4) {
-                                f.vx *= 4/speed;
-                                f.vy *= 4/speed;
-                            }
-                            // Bounce
-                            if (f.x < f.size) { f.x = f.size; f.vx *= -1; }
-                            if (f.x > width-f.size) { f.x = width-f.size; f.vx *= -1; }
-                            if (f.y < f.size/2) { f.y = f.size/2; f.vy *= -1; }
-                            if (f.y > height-f.size/2) { f.y = height-f.size/2; f.vy *= -1; }
-                            // Eat food
-                            for (let i = food.length-1; i >= 0; i--) {
-                                const p = food[i];
-                                if (Math.hypot(f.x-p.x, f.y-p.y) < f.size) {
-                                    food.splice(i,1);
-                                    f.hungry = false;
-                                }
-                            }
-                            drawFish(f);
-                        }
+        function playSound(type) {
+            if (!state.audioEnabled || !state.audioCtx || state.audioCtx.state !== 'running') return;
+            const t = state.audioCtx.currentTime;
 
-                        // Food
-                        for (const p of food) {
-                            p.y += 1.5;
-                            drawFood(p);
-                        }
+            // --- TYPE 1: FOOD DROP ("Plop") ---
+            if (type === 'plop') {
+                const osc = state.audioCtx.createOscillator();
+                const gain = state.audioCtx.createGain();
+                osc.type = 'sine';
+                
+                // Classic water drop: Pitch bends UP quickly
+                osc.frequency.setValueAtTime(400, t);
+                osc.frequency.exponentialRampToValueAtTime(600, t + 0.1);
+                
+                // Envelope: Fast attack, smooth decay
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.8, t + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+                
+                osc.connect(gain).connect(state.gainNode);
+                osc.start(t);
+                osc.stop(t + 0.25);
+            }
 
-                        requestAnimationFrame(animate);
-                    }
-                    animate();
+            // --- TYPE 2: WATER TOUCH ("Splash") ---
+            // As requested: Sounds like the food drop, but distinct
+            else if (type === 'splash') {
+                const osc = state.audioCtx.createOscillator();
+                const gain = state.audioCtx.createGain();
+                osc.type = 'sine';
+                
+                // Start lower (300Hz) to sound "bigger" than the food
+                // Still bends UP to maintain the "liquid" character
+                osc.frequency.setValueAtTime(300, t); 
+                osc.frequency.exponentialRampToValueAtTime(500, t + 0.1); 
+                
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.6, t + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+                
+                osc.connect(gain).connect(state.gainNode);
+                osc.start(t);
+                osc.stop(t + 0.35);
+            }
+            
+            // --- TYPE 3: EATING ("Gulp") ---
+            // As requested: A "Glug" sound (Pitch bends DOWN)
+            else if (type === 'chomp') {
+                const osc = state.audioCtx.createOscillator();
+                const gain = state.audioCtx.createGain();
+                osc.type = 'sine'; 
+                
+                // Pitch bends DOWN rapidly (500Hz -> 100Hz)
+                // This mimics the physics of a bubble closing or a throat swallowing
+                osc.frequency.setValueAtTime(500, t);
+                osc.frequency.exponentialRampToValueAtTime(100, t + 0.1);
 
-                    // Feeding (limit food to 2x fish count)
-                    canvas.addEventListener('pointerdown', e => {
-                        if (mode === 'feed') {
-                            if (food.length < fish.length * 2) {
-                                food.push({ x: e.clientX, y: e.clientY });
-                            }
-                        }
-                    });
-
-                    // Touching
-                    canvas.addEventListener('pointerdown', e => {
-                        if (mode === 'touch') {
-                            for (const f of fish) {
-                                if (Math.hypot(f.x-e.clientX, f.y-e.clientY) < f.size) {
-                                    f.vx += (Math.random()-0.5)*4;
-                                    f.vy += (Math.random()-0.5)*4;
-                                }
-                            }
-                        }
-                    });
-
-                    // Night mode toggle
-                    document.addEventListener('keydown', e => {
-                        if (e.key === 'n') night = !night;
-                    });
-
-                    // Resize
-                    window.addEventListener('resize', () => {
-                        width = window.innerWidth;
-                        height = window.innerHeight;
-                        canvas.width = width;
-                        canvas.height = height;
-                        FISH_COUNT = getFishCount();
-                        createFish();
-                    });
-                </script>
-            </body>
-            </html>
                 // Sharper volume envelope
                 gain.gain.setValueAtTime(0, t);
                 gain.gain.linearRampToValueAtTime(1.0, t + 0.01); 
