@@ -88,7 +88,6 @@
             baseSpeed: 1.0,
             fleeSpeed: 9.0,
             fleeRadius: 350,
-            // Optimization: Limit visual waves to prevent CPU overload
             maxWaves: 50,
             colors: {
                 day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
@@ -103,24 +102,34 @@
             fish: [],
             food: [],
             input: { x: null, y: null, active: false },
-            
             // Flags
             audioEnabled: false,
             feedingMode: true, // DEFAULT SET TO TRUE (FOOD)
             nightMode: false,
             running: true,
-
             // Audio Resources
             audioCtx: null,
             gainNode: null,
-            animationId: null
+            animationId: null,
+            ambientSource: null,   // For stopping background audio cleanly
+            isMobile: false
         };
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d', { alpha: false });
 
         // ============================================
+        // 0. MOBILE DETECTION (for optimization)
+        // ============================================
+        function detectMobile() {
+            // Basic mobile detection
+            state.isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+        detectMobile();
+
+        // ============================================
         // 1. IMPROVED AUDIO ENGINE (SINE WAVE BASED)
+        //     - Terminate all sound when hidden/blurred
         // ============================================
         function initAudio() {
             if (state.audioCtx) return;
@@ -150,11 +159,40 @@
 
                 ambNode.connect(filter).connect(state.gainNode);
                 ambNode.start(0);
+                state.ambientSource = ambNode;
             } catch(e) { console.warn("Audio Init Failed", e); }
         }
 
+        function cleanupAudio() {
+            // Stop all ambient audio and prevent screechy issues
+            if (state.ambientSource) {
+                try { state.ambientSource.stop(); } catch(e) {}
+                state.ambientSource.disconnect();
+                state.ambientSource = null;
+            }
+            if (state.audioCtx) {
+                state.audioCtx.close();
+                state.audioCtx = null;
+                state.gainNode = null;
+            }
+        }
+
+        function pauseAudio() {
+            // Used when the window is blurred/hidden
+            if (state.audioCtx && state.audioCtx.state === 'running') {
+                state.audioCtx.suspend();
+            }
+        }
+
+        function resumeAudio() {
+            if (state.audioEnabled && state.audioCtx) {
+                state.audioCtx.resume();
+            }
+        }
+
         function playSound(type) {
-            if (!state.audioEnabled || !state.audioCtx || state.audioCtx.state !== 'running') return;
+            // No sound in inactive states
+            if (!state.audioEnabled || !state.audioCtx || state.audioCtx.state !== 'running' || document.hidden) return;
             const t = state.audioCtx.currentTime;
 
             if (type === 'plop') {
@@ -201,7 +239,6 @@
         // ============================================
         // 2. GAME ENTITIES (OPTIMIZED)
         // ============================================
-        
         class Pellet {
             constructor(x, y) {
                 this.x = x; this.y = y;
@@ -215,6 +252,40 @@
             }
         }
 
+        // ============================
+        // -- FISH TEXTURE VARIATION --
+        // ============================
+        function drawFishTexture(ctx, x, y, size, typeSeed, col) {
+            const bodyGradient = ctx.createRadialGradient(x, y, size*0.2, x, y, size*1.05);
+            bodyGradient.addColorStop(0, 'rgba(255,255,255,0.6)');
+            bodyGradient.addColorStop(0.5, col);
+            bodyGradient.addColorStop(1, 'rgba(0,0,0,0.15)');
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(x, y, size, 0, Math.PI*2);
+            ctx.fillStyle = bodyGradient;
+            ctx.globalAlpha = 1;
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+            // Simulate shimmering scales
+            const sCount = 3 + (typeSeed%6);
+            for(let j=0; j<sCount; j++) {
+                ctx.save();
+                ctx.globalAlpha = 0.18 + Math.random()*0.04;
+                ctx.beginPath();
+                ctx.arc(
+                    x + Math.cos(j+typeSeed) * size*0.4, 
+                    y + Math.sin(j+typeSeed*1.3) * size*0.36, 
+                    size*0.16, 0, Math.PI*2);
+                ctx.fillStyle = 'rgba(255,255,255,0.25)';
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+            ctx.restore();
+        }
+
         class Fish {
             constructor() { this.reset(); }
             
@@ -223,9 +294,12 @@
                 this.y = Math.random() * state.height;
                 this.angle = Math.random() * Math.PI * 2;
                 this.speed = CONFIG.baseSpeed + Math.random() * 0.5;
-                this.size = 12 + Math.random() * 10;
+                // On mobile, bigger to make up for smaller screen, and reduce number
+                this.size = state.isMobile ? 18 + Math.random() * 10 : 12 + Math.random() * 10;
                 this.wiggle = Math.random() * 10;
-                
+                this.typeSeed = Math.floor(Math.random()*50);
+
+                // Colors and spots
                 const r = Math.random();
                 if (r < 0.2) { this.col = '#f0f0f0'; this.spots = '#ff4400'; }
                 else if (r < 0.35) { this.col = '#ffaa00'; this.spots = '#ffaa00'; }
@@ -265,29 +339,22 @@
                     
                     // Only check food reasonably close (Box Check) for huge gains
                     const searchBox = 300; 
-
                     for(let i=0; i<state.food.length; i++){
                         const f = state.food[i];
                         const dx = f.x - this.x;
                         const dy = f.y - this.y;
-                        
-                        // Fast discard
                         if (Math.abs(dx) > searchBox || Math.abs(dy) > searchBox) continue;
-
                         const dSq = dx*dx + dy*dy;
                         if (dSq < nearestDistSq) {
                             nearestDistSq = dSq;
                             nearestFood = f;
                         }
                     }
-
                     if (nearestFood) {
                         targetAngle = Math.atan2(nearestFood.y - this.y, nearestFood.x - this.x);
                         targetSpeed = 3.5;
-                        
                         // Eat check (Distance squared < 10*10)
                         if (nearestDistSq < 100) {
-                            // Find actual index to remove (in case array shifted)
                             const index = state.food.indexOf(nearestFood);
                             if (index > -1) {
                                 state.food.splice(index, 1);
@@ -345,7 +412,6 @@
                 ctx.fillStyle = isShadow ? 'rgba(0,0,0,0.4)' : this.col;
                 const finWag = Math.sin(this.wiggle)*0.6;
                 const finS = this.size * 1.3;
-                
                 ctx.save();
                 ctx.translate(this.trail[2].x, this.trail[2].y);
                 ctx.rotate(angle);
@@ -359,20 +425,38 @@
                 ctx.fill();
                 ctx.restore();
 
-                this.trail.forEach((t, i) => {
+                for(let i=0; i<this.trail.length; i++) {
+                    let t = this.trail[i];
                     let r = this.size * (1 - i/this.trail.length);
                     if (i<3) r = this.size;
                     ctx.beginPath();
                     ctx.arc(t.x, t.y, r, 0, Math.PI*2);
-                    
                     if (isShadow) { 
                         ctx.fillStyle = 'rgba(0,0,0,0.4)'; 
+                        ctx.fill();
                     } else {
-                        if (this.spots === 'tancho') ctx.fillStyle = (i === 0) ? '#ff0000' : this.col;
-                        else ctx.fillStyle = (i%3===0 || i===0) ? this.col : this.spots;
+                        // Fish base color (gradient/texture)
+                        drawFishTexture(ctx, t.x, t.y, r, this.typeSeed + i, this.col);
+                        // Classic spots
+                        if (this.spots === 'tancho') {
+                            if (i === 0) {
+                                ctx.beginPath();
+                                ctx.arc(t.x, t.y, r*0.6, 0, Math.PI*2);
+                                ctx.fillStyle = '#ff0000';
+                                ctx.fill();
+                            }
+                        } else if (i % 3 === 0 || i === 0) {
+                            ctx.globalAlpha = 0.7; // Some transparency for base
+                        } else {
+                            ctx.beginPath();
+                            ctx.arc(t.x, t.y, r*0.8, 0, Math.PI*2);
+                            ctx.fillStyle = this.spots;
+                            ctx.globalAlpha = 0.35 + 0.18 * Math.sin(this.typeSeed+i);
+                            ctx.fill();
+                        }
+                        ctx.globalAlpha = 1;
                     }
-                    ctx.fill();
-                });
+                }
                 
                 if (!isShadow) {
                     ctx.save();
@@ -423,28 +507,73 @@
             }
         }
 
+
+        // === 3a. NIGHT MODE: Draw Stars ===
+        let stars = [];
+        function generateStars() {
+            let count = Math.floor(Math.max(45, (state.width * state.height)/13000));
+            stars = [];
+            for(let i=0; i<count; i++) {
+                stars.push({
+                    x: Math.random() * state.width,
+                    y: Math.random() * state.height * 0.4,
+                    size: Math.random()*1.2 + 0.5,
+                    tw: Math.random()*Math.PI*2
+                });
+            }
+        }
+
+        function drawStars(t) {
+            if (!state.nightMode) return;
+            ctx.save();
+            ctx.globalAlpha = 0.92;
+            for (const s of stars) {
+                ctx.save();
+                const pulse = 0.8 + 0.4 * Math.sin(t*0.001 + s.tw*3.5);
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.size * pulse, 0, Math.PI*2);
+                ctx.fillStyle = 'rgba(180,220,255,0.8)';
+                ctx.shadowColor = 'white';
+                ctx.shadowBlur = 4 * pulse;
+                ctx.fill();
+                ctx.restore();
+            }
+            ctx.restore();
+        }
+
         // ============================================
         // 3. CORE RENDERING & LOOP
         // ============================================
-        
         function drawWater(t) {
             const palette = state.nightMode ? CONFIG.colors.night : CONFIG.colors.day;
             const cx = state.width/2, cy = state.height/2;
-            const grad = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.max(state.width, state.height));
+            // Mobile: move perspective "closer" (center gradient closer, bigger caustics) & fewer fish
+            let grad;
+            let cxM = cx, cyM = cy, maxR = Math.max(state.width, state.height);
+            if (state.isMobile) {
+                cxM = state.width/2.2;
+                cyM = state.height*0.62;
+                maxR = Math.max(state.width, state.height)*0.8;
+            }
+            grad = ctx.createRadialGradient(cxM, cyM, 10, cxM, cyM, maxR);
             grad.addColorStop(0, palette.shallow);
             grad.addColorStop(1, palette.deep);
             ctx.fillStyle = grad;
             ctx.fillRect(0,0,state.width, state.height);
+
+            // Stars
+            if (state.nightMode) drawStars(t);
 
             ctx.save();
             ctx.globalCompositeOperation = 'overlay';
             ctx.fillStyle = palette.caustic;
             const time = t * 0.0003;
             // Optimization: Reduced caustic layers slightly for mobile
-            for(let i = 0; i < 5; i++) {
-                const offsetX = Math.sin(time + i) * 200;
-                const offsetY = Math.cos(time * 0.7 + i) * 150;
-                const size = 150 + Math.sin(time * 0.5 + i)*50;
+            const causticLayers = state.isMobile ? 3 : 5;
+            for(let i = 0; i < causticLayers; i++) {
+                const offsetX = Math.sin(time + i) * (state.isMobile ? 120 : 200);
+                const offsetY = Math.cos(time * 0.7 + i) * (state.isMobile ? 95 : 150);
+                const size = (state.isMobile ? 130 : 150) + Math.sin(time * 0.5 + i)*50;
                 ctx.beginPath();
                 ctx.ellipse(cx + offsetX, cy + offsetY, size, size * 0.6, time + i, 0, Math.PI * 2);
                 ctx.fill();
@@ -454,17 +583,35 @@
 
         function init() {
             resize();
-            for(let i=0; i<CONFIG.fishCount; i++) state.fish.push(new Fish());
+            // Adjust fish count for mobile (closer perspective/bigger fish)
+            let fishCount = state.isMobile ? 11 : CONFIG.fishCount;
+            for(let i=0; i<fishCount; i++) state.fish.push(new Fish());
             if (localStorage.getItem('wb_v12_audio') === 'true') toggleAudio(true);
-            
+
+            generateStars();
+
             document.addEventListener("visibilitychange", () => {
                 if (document.hidden) {
                     state.running = false;
                     cancelAnimationFrame(state.animationId);
-                    if(state.audioCtx) state.audioCtx.suspend();
+                    pauseAudio();
                 } else {
                     state.running = true;
-                    if(state.audioEnabled && state.audioCtx) state.audioCtx.resume();
+                    resumeAudio();
+                    loop();
+                }
+            });
+
+            window.addEventListener("blur", () => {
+                // Stops running and audio if tab lost focus
+                state.running = false;
+                cancelAnimationFrame(state.animationId);
+                pauseAudio();
+            });
+            window.addEventListener("focus", () => {
+                if (!state.running) {
+                    state.running = true;
+                    resumeAudio();
                     loop();
                 }
             });
@@ -476,20 +623,20 @@
             state.height = window.innerHeight;
             canvas.width = state.width;
             canvas.height = state.height;
+            generateStars();
         }
 
         function loop() {
             if (!state.running) return;
-            drawWater(Date.now());
+            const t = Date.now();
+            drawWater(t);
             
             // --- OPTIMIZED FOOD RENDERING ---
-            // Batch drawing squares is 10x faster than individual circles
             if (state.food.length > 0) {
                 ctx.fillStyle = '#8B4513';
                 ctx.beginPath();
                 state.food.forEach(f => {
                     f.update();
-                    // Draw Square (Optimization)
                     ctx.rect(f.x - f.size/2, f.y - f.size/2, f.size, f.size);
                 });
                 ctx.fill();
@@ -513,7 +660,7 @@
         }
 
         // ============================================
-        // 4. INPUT HANDLING
+        // 4. INPUT HANDLING (unchanged)
         // ============================================
 
         function handleInput(e) {
@@ -580,6 +727,7 @@
         function toggleNight() {
             state.nightMode = !state.nightMode;
             document.getElementById('btn-night').classList.toggle('active', state.nightMode);
+            generateStars();
         }
 
         window.addEventListener('resize', resize);
@@ -589,6 +737,11 @@
         document.getElementById('btn-audio').addEventListener('click', (e) => { e.stopPropagation(); toggleAudio(); });
         document.getElementById('btn-mode').addEventListener('click', (e) => { e.stopPropagation(); toggleMode(); });
         document.getElementById('btn-night').addEventListener('click', (e) => { e.stopPropagation(); toggleNight(); });
+
+        window.addEventListener("beforeunload", () => {
+            // Free audio context on unload
+            cleanupAudio();
+        });
 
         init();
     </script>
