@@ -280,6 +280,10 @@
                 this.speed = CONFIG.baseSpeed + Math.random() * 0.5;
                 this.size = 12 + Math.random() * 10;
                 this.wiggle = Math.random() * 10;
+                // Independent random-turn state
+                this.nextTurnTimer = this.randomTurnInterval();
+                this.turnDir = 0; // -1 for left, 1 for right
+                this.turnAmount = 0; // how much to turn (in radians)
                 // Random Color Assignment
                 const r = Math.random();
                 if (r < 0.2) { this.col = '#f0f0f0'; this.spots = '#ff4400'; }
@@ -292,7 +296,29 @@
                 for(let i=0; i<10; i++) this.trail.push({x:this.x, y:this.y});
             }
 
+            randomTurnInterval() {
+                // 3–5 seconds, but work in frames by multiplying by 60 (assuming ~60fps; dt is used)
+                return randomInRange(3,5) * 60; // measured in "frames" for dt logic
+            }
+            randomTurnSetup() {
+                this.nextTurnTimer = this.randomTurnInterval();
+                this.turnDir = Math.random() < 0.5 ? -1 : 1; // -1 (left) or 1 (right)
+                this.turnAmount = randomInRange(15, 60) * Math.PI/180; // convert degrees to radians
+            }
+
             update(ix, iy, dt) {
+                // Handle random independent turning
+                this.nextTurnTimer -= dt;
+                if(this.nextTurnTimer <= 0) {
+                    this.randomTurnSetup();
+                }
+                // During normal cruise, add random turn to heading
+                let independentTurn = 0;
+                if(this.turnAmount > 0) {
+                    independentTurn = this.turnDir * Math.min(this.turnAmount, 0.017 * dt); // 0.017 rad ~ 1 deg
+                    this.turnAmount -= Math.abs(independentTurn);
+                }
+
                 let targetAngle = this.angle;
                 let targetSpeed = CONFIG.baseSpeed;
                 let isFleeing = false;
@@ -325,7 +351,7 @@
                 while (diff < -Math.PI) diff += Math.PI * 2;
                 while (diff > Math.PI) diff -= Math.PI * 2;
                 const turnRate = isFleeing ? 0.15 : 0.05;
-                this.angle += diff * turnRate * dt;
+                this.angle += diff * turnRate * dt + independentTurn;
                 this.speed += (targetSpeed - this.speed) * 0.05 * dt;
                 this.x += Math.cos(this.angle) * this.speed * dt;
                 this.y += Math.sin(this.angle) * this.speed * dt;
@@ -533,6 +559,8 @@
 
             // Update & Draw Waves
             state.waves = state.waves.filter(w => w.age < w.life);
+            // Cap number of active waves to reduce lag (optional, e.g. 32)
+            if(state.waves.length > 32) state.waves = state.waves.slice(state.waves.length-32);
             state.waves.forEach(w => { w.update(dt); w.draw(ctx); });
 
             state.animationId = requestAnimationFrame(loop);
@@ -593,10 +621,8 @@
                 if (state.feedingMode) {
                     state.food.push(new Pellet(x, y));
                     playSound('plop'); 
-                    for(let i=0; i<3; i++) {
-                        const a = (Math.PI*2/3)*i;
-                        state.waves.push(new Wave(x, y, Math.cos(a)*0.4, Math.sin(a)*0.4));
-                    }
+                    // Only 1 ripple per food drop (reduce lag)
+                    state.waves.push(new Wave(x, y, Math.cos(Math.random()*Math.PI*2)*0.4, Math.sin(Math.random()*Math.PI*2)*0.4));
                 } else {
                     state.input = {x, y, active: true};
                     playSound('splash'); 
@@ -668,5 +694,3 @@
     </script>
 </body>
 </html>
-
-
