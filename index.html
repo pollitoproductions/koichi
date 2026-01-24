@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Wavebox: Koi Chi (Classic Food Seek, Mobile Tweaks)</title>
+    <title>Wavebox: Koi Chi (Mobile & Calmer Classic Food Seek)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <style>
         body, html {
@@ -136,11 +136,11 @@
 const IS_MOBILE = window.innerWidth < 600;
 const CONFIG = {
     fishCount: IS_MOBILE ? 8 : 15,
-    baseSpeed: 1, // fixed as requested
-    fleeSpeed: 6.7,
-    foodSpeed: 6.7, // used below, but see food block
-    idleSpeedMin: IS_MOBILE ? 0.93 : 1.0,
-    idleSpeedMax: IS_MOBILE ? 1.49 : 2.14,
+    baseSpeed: 1.0,
+    fleeSpeed: 5.5,
+    foodSpeed: 2.7,
+    idleSpeedMin: IS_MOBILE ? 0.9 : 1.0,
+    idleSpeedMax: IS_MOBILE ? 1.25 : 1.6,
     fleeRadius: IS_MOBILE ? 200 : 350,
     colors: {
         day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
@@ -196,6 +196,7 @@ function setupDayBubbles() {
         state.bubbles.push({x, y, r, phase, speed, origy: y});
     }
 }
+// --- AUDIO/PELLET/WAVE: UNCHANGED ---
 function fadeOutGainAndStop(callback) {
     if (state.gainNode) {
         try {
@@ -299,7 +300,6 @@ class Pellet {
         ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill();
     }
 }
-// --- Fish with original food-seek (nearest pellet only, classic chaining path!) ---
 class Fish {
     constructor() { this.reset(); }
     reset() {
@@ -340,7 +340,7 @@ class Fish {
             });
             if (nearestFood && nearestDist < 300) {
                 targetAngle = Math.atan2(nearestFood.y - this.y, nearestFood.x - this.x);
-                targetSpeed = CONFIG.foodSpeed; // 6.7 as you asked
+                targetSpeed = CONFIG.foodSpeed;
                 if (nearestDist < 10) {
                     state.food = state.food.filter(f => f !== nearestFood);
                     playSound('chomp');
@@ -539,6 +539,25 @@ function loop(now) {
     ctx.fillRect(0,0,state.width, state.height);
     state.waves = state.waves.filter(w => w.age < w.life);
     state.waves.forEach(w => { w.update(dt); w.draw(ctx); });
+    // --- CONTINUOUS RIPPLE WHILE TOUCH/DRAG ---
+    if (!state.feedingMode && state.input.active) {
+        let tNow = performance.now();
+        // If enough time or distance since last, create new ripple
+        if (!state.lastWaveAdded || (tNow - state.lastWaveAdded > 25)) {
+            // Use previous/last drag position or start at center if not available
+            const x = state.input.x, y = state.input.y;
+            let dx = 0, dy = 1;
+            if(state.lastWaveDragX!==null&&state.lastWaveDragY!==null){
+                dx = y-state.lastWaveDragY;
+                dy = state.lastWaveDragX-x;
+                let mag = Math.hypot(dx,dy)||1; dx/=mag;dy/=mag;
+            }
+            state.waves.push(new Wave(x, y, dx, dy, {life: 44, spread: 18, colorAlpha: 0.88}));
+            state.lastWaveDragX = x;
+            state.lastWaveDragY = y;
+            state.lastWaveAdded = tNow;
+        }
+    }
     state.animationId = requestAnimationFrame(loop);
 }
 function init() {
@@ -616,27 +635,16 @@ function handleInput(e) {
         if (!state.feedingMode && state.input.active) {
             state.input = {x, y, active: true}; // persist as long as you drag
             state.persistentTouch = true;
-            const prevX = state.lastWaveDragX, prevY = state.lastWaveDragY;
-            const dx = x - (prevX ?? x), dy = y - (prevY ?? y);
-            const dist = Math.hypot(dx, dy);
-            if (dist >= CONFIG.dragWaveDist) {
-                state.lastWaveDragX = x;
-                state.lastWaveDragY = y;
-                state.lastTouch = {x, y, time: performance.now()};
-                let activeTouchWaves = state.waves.filter(w => w.life >= 40).length;
-                if (activeTouchWaves < CONFIG.maxTouchWaves) {
-                    const mdx = dx / dist, mdy = dy / dist;
-                    state.waves.push(new Wave(x, y, -mdy, mdx, {life: 44, spread: 18, colorAlpha: 0.88}));
-                    state.waves.push(new Wave(x, y,  mdy, -mdx, {life: 44, spread: 18, colorAlpha: 0.88}));
-                    if(Math.random()<0.13) playSound('splash');
-                }
-            }
+            state.lastWaveDragX = x;
+            state.lastWaveDragY = y;
+            state.lastTouch = {x, y, time: performance.now()};
         }
     }
     else {
         state.input.active = false;
         state.persistentTouch = false;
         state.lastWaveDragX = null; state.lastWaveDragY = null;
+        state.lastWaveAdded = null;
     }
 }
 function toggleAudio(force) {
