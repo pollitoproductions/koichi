@@ -337,7 +337,7 @@
                         const d = Math.hypot(p.x - this.x, p.y - this.y);
                         if(d < nearestDist) { nearestDist = d; nearestFood = p; }
                     });
-                    if (nearestFood && nearestDist < 300) {
+                    if (nearestFood && nearestDist < 400) {
                         targetAngle = Math.atan2(nearestFood.y - this.y, nearestFood.x - this.x);
                         targetSpeed = 3.5;
                         if (nearestDist < 10) {
