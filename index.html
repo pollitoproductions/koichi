@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Wavebox: Koi Chi</title>
+    <title>Wavebox: Koi Chi v2.0 (Classic Sounds Restored)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <style>
         body, html {
@@ -75,6 +75,7 @@
     </div>
     <canvas id="gameCanvas"></canvas>
     <script>
+    // --- FISH COLORS and CONFIG are unchanged from previous version ---
     const pastelFishes = [
         { col: '#ffdad1', spots: '#ffc7ae' }, // peach
         { col: '#fff9ca', spots: '#ffe7ad' }, // pastel yellow
@@ -98,7 +99,6 @@
         { col: '#c9b4fc', spots: '#7871c4' }  // pastel violet, deep purple
     ];
     const tanchoRed = '#ff7676';
-
     const CONFIG = {
         fishCount: 20,
         baseSpeed: 1.0,
@@ -144,13 +144,14 @@
     }
     detectMobile();
 
+    // --- CLASSIC "plop" and "splash" sounds ---
     function initAudio() {
         if (state.audioCtx) return;
         try {
             const AC = window.AudioContext || window.webkitAudioContext;
             state.audioCtx = new AC();
             state.gainNode = state.audioCtx.createGain();
-            state.gainNode.gain.value = 0.7;
+            state.gainNode.gain.value = 0.8; 
             state.gainNode.connect(state.audioCtx.destination);
 
             const ambNode = state.audioCtx.createBufferSource();
@@ -159,16 +160,16 @@
             let lastOut = 0;
             for(let i=0; i<ambBuf.length; i++){
                 const white = Math.random() * 2 - 1;
-                ad[i] = (lastOut + (0.015 * white)) / 1.01;
+                ad[i] = (lastOut + (0.02 * white)) / 1.02;
                 lastOut = ad[i];
-                ad[i] *= 3.3;
+                ad[i] *= 3.5;
             }
             ambNode.buffer = ambBuf;
             ambNode.loop = true;
 
             const filter = state.audioCtx.createBiquadFilter();
             filter.type = 'lowpass';
-            filter.frequency.value = 480;
+            filter.frequency.value = 400;
 
             ambNode.connect(filter).connect(state.gainNode);
             ambNode.start(0);
@@ -193,55 +194,34 @@
     function resumeAudio() {
         if (state.audioEnabled && state.audioCtx) state.audioCtx.resume();
     }
-    // Water "plop" and splash sounds, always sound
     function playSound(type) {
         if (!state.audioEnabled || !state.audioCtx || state.audioCtx.state !== 'running' || document.hidden) return;
         const t = state.audioCtx.currentTime;
 
         if (type === 'plop') {
-            // Softer watery flick: layered short triangle/sine, mini "droplet" noise crackle,
-            // to get realistic wet click, with short pitch down pulse
-            for(let i=0; i<2; i++) {
-                let osc = state.audioCtx.createOscillator();
-                let gain = state.audioCtx.createGain();
-                osc.type = i===0 ? 'triangle' : 'sine';
-                let f0 = i===0 ? 410 : 265;
-                osc.frequency.setValueAtTime(f0, t);
-                osc.frequency.exponentialRampToValueAtTime(f0/2.4, t+0.11+0.03*i);
-                gain.gain.setValueAtTime(0, t);
-                gain.gain.linearRampToValueAtTime(0.1+0.05*i, t+0.015);
-                gain.gain.exponentialRampToValueAtTime(0.007, t+0.20+0.045*i);
-                osc.connect(gain).connect(state.gainNode);
-                osc.start(t);
-                osc.stop(t + 0.22+0.04*i);
-            }
-            // "bubble"/"crackle" drop: add a white noise burst filtered short
-            const noise = state.audioCtx.createBufferSource();
-            const buf = state.audioCtx.createBuffer(1, state.audioCtx.sampleRate*0.07, state.audioCtx.sampleRate);
-            const data = buf.getChannelData(0);
-            for(let i=0;i<buf.length;i++) data[i] = (Math.random()*2-1)*(1-(i/buf.length))*(Math.random()<0.85?1:0);
-            noise.buffer = buf;
-            let low = state.audioCtx.createBiquadFilter();
-            low.type = "lowpass";
-            low.frequency.value = 600;
-            let gain = state.audioCtx.createGain();
-            gain.gain.setValueAtTime(0.18, t);
-            gain.gain.linearRampToValueAtTime(0.01, t+0.07);
-            noise.connect(low).connect(gain).connect(state.gainNode);
-            noise.start(t);
-            noise.stop(t+0.08);
-        } else if (type === 'splash') {
             const osc = state.audioCtx.createOscillator();
             const gain = state.audioCtx.createGain();
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(180, t); 
-            osc.frequency.exponentialRampToValueAtTime(370, t + 0.12); 
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(400, t);
+            osc.frequency.exponentialRampToValueAtTime(600, t + 0.1);
             gain.gain.setValueAtTime(0, t);
-            gain.gain.linearRampToValueAtTime(0.08, t + 0.015);
-            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.22);
+            gain.gain.linearRampToValueAtTime(0.8, t + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
             osc.connect(gain).connect(state.gainNode);
             osc.start(t);
             osc.stop(t + 0.25);
+        } else if (type === 'splash') {
+            const osc = state.audioCtx.createOscillator();
+            const gain = state.audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(300, t); 
+            osc.frequency.exponentialRampToValueAtTime(500, t + 0.1); 
+            gain.gain.setValueAtTime(0, t);
+            gain.gain.linearRampToValueAtTime(0.6, t + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+            osc.connect(gain).connect(state.gainNode);
+            osc.start(t);
+            osc.stop(t + 0.35);
         } else if (type === 'chomp') {
             const osc = state.audioCtx.createOscillator();
             const gain = state.audioCtx.createGain();
@@ -256,6 +236,8 @@
             osc.stop(t + 0.2);
         }
     }
+
+    // --- All remaining code is visually unchanged from previous version ---
 
     class Pellet {
         constructor(x, y) { this.x = x; this.y = y; this.size = 0; this.targetSize = 4; this.age = 0;}
@@ -299,7 +281,6 @@
             this.size = state.isMobile ? 18 + Math.random() * 10 : 12 + Math.random() * 10;
             this.wiggle = Math.random() * 10;
             this.typeSeed = Math.floor(Math.random()*100);
-            // Favor pastels but allow some dark for variety
             if (Math.random()<0.13) {
                 this.col = '#fff';
                 this.spots = 'tancho';
@@ -632,7 +613,7 @@
                 }
             } else {
                 state.input = {x, y, active: true};
-                playSound('plop'); // "splash" was too sharp, we want watery ripple for both
+                playSound('splash');
                 for(let i=0; i<5; i++) {
                     const a = (Math.PI/2)*i;
                     state.waves.push(new Wave(x, y, Math.cos(a), Math.sin(a)));
@@ -650,7 +631,7 @@
                     const nx = dx/dist, ny = dy/dist;
                     state.waves.push(new Wave(x, y, -ny, nx));
                     state.waves.push(new Wave(x, y, ny, -nx));
-                    if(Math.random()<0.15) playSound('plop');
+                    if(Math.random()<0.15) playSound('splash');
                 }
             }
         } 
