@@ -337,10 +337,10 @@
                         const d = Math.hypot(p.x - this.x, p.y - this.y);
                         if(d < nearestDist) { nearestDist = d; nearestFood = p; }
                     });
-                    if (nearestFood && nearestDist < 500) {
+                    if (nearestFood && nearestDist < 450) {
                         targetAngle = Math.atan2(nearestFood.y - this.y, nearestFood.x - this.x);
                         targetSpeed = 3.5;
-                        if (nearestDist < 20) {
+                        if (nearestDist < 10) {
                             state.food = state.food.filter(f => f !== nearestFood);
                             playSound('chomp');
                             this.wiggle += 10;
