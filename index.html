@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Wavebox: Koi Chi</title>
+    <title>Wavebox: Koi Chi v1.8 (Pastel, Teal, Softer Water)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <style>
         body, html {
@@ -10,7 +10,7 @@
             padding: 0;
             width: 100%;
             height: 100%;
-            background-color: #001e26;
+            background-color: #003438;
             overflow: hidden;
             touch-action: none;
             -webkit-user-select: none;
@@ -75,6 +75,23 @@
     </div>
     <canvas id="gameCanvas"></canvas>
     <script>
+    const pastelFishes = [
+        // Appealing, pastel, NO dull green. "spots" are optional, try to harmonize.
+        { col: '#ffdad1', spots: '#ffc7ae' }, // soft peach
+        { col: '#fff9ca', spots: '#ffe7ad' }, // pastel yellow
+        { col: '#c7e9fb', spots: '#a0dbef' }, // soft sky blue
+        { col: '#f0dcf9', spots: '#dfbae6' }, // lavender
+        { col: '#faf0fc', spots: '#e9d6f0' }, // lighter orchid
+        { col: '#ffd6f3', spots: '#ffa6e3' }, // pastel pink
+        { col: '#fff',    spots: '#f7c3bd' }, // classic light koi with blush
+        { col: '#dbefff', spots: '#adc9fa' }, // blue-white
+        { col: '#ffeeec', spots: '#ffd9cb' }, // cream
+        { col: '#caffeb', spots: '#9dffe2' }, // minty pastel teal
+        { col: '#fff3e3', spots: '#ffe4c0' }, // old gold 
+        { col: '#e3ffd9', spots: '#bbffb0' }  // pastel pale green (gentle)
+    ];
+    const tanchoRed = '#ff7676';
+
     const CONFIG = {
         fishCount: 20,
         baseSpeed: 1.0,
@@ -82,8 +99,16 @@
         fleeRadius: 350,
         maxWaves: 50,
         colors: {
-            day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
-            night: { deep: '#000a12', shallow: '#001a24', caustic: 'rgba(100,150,255,0.04)' }
+            day: {
+                deep: '#0aa1a7',      // TEAL DEEP
+                shallow: '#5ff6ef',   // TEAL SHALLOW (bright teal/aqua)
+                caustic: 'rgba(255,255,255,0.13)'
+            },
+            night: {
+                deep: '#015e67',      // dark teal blue
+                shallow: '#1bc1bc',   // lighter teal/aqua
+                caustic: 'rgba(100,180,255,0.07)'
+            }
         }
     };
     const state = {
@@ -118,7 +143,7 @@
             const AC = window.AudioContext || window.webkitAudioContext;
             state.audioCtx = new AC();
             state.gainNode = state.audioCtx.createGain();
-            state.gainNode.gain.value = 0.8; 
+            state.gainNode.gain.value = 0.7;
             state.gainNode.connect(state.audioCtx.destination);
 
             const ambNode = state.audioCtx.createBufferSource();
@@ -127,16 +152,16 @@
             let lastOut = 0;
             for(let i=0; i<ambBuf.length; i++){
                 const white = Math.random() * 2 - 1;
-                ad[i] = (lastOut + (0.02 * white)) / 1.02;
+                ad[i] = (lastOut + (0.015 * white)) / 1.01;
                 lastOut = ad[i];
-                ad[i] *= 3.5;
+                ad[i] *= 3.3;
             }
             ambNode.buffer = ambBuf;
             ambNode.loop = true;
 
             const filter = state.audioCtx.createBiquadFilter();
             filter.type = 'lowpass';
-            filter.frequency.value = 400;
+            filter.frequency.value = 480;
 
             ambNode.connect(filter).connect(state.gainNode);
             ambNode.start(0);
@@ -156,46 +181,47 @@
         }
     }
     function pauseAudio() {
-        if (state.audioCtx && state.audioCtx.state === 'running') {
-            state.audioCtx.suspend();
-        }
+        if (state.audioCtx && state.audioCtx.state === 'running') state.audioCtx.suspend();
     }
     function resumeAudio() {
-        if (state.audioEnabled && state.audioCtx) {
-            state.audioCtx.resume();
-        }
+        if (state.audioEnabled && state.audioCtx) state.audioCtx.resume();
     }
+    // Softer water disturbance: multiple sine blips, ramped, gain not as harsh
     function playSound(type) {
         if (!state.audioEnabled || !state.audioCtx || state.audioCtx.state !== 'running' || document.hidden) return;
         const t = state.audioCtx.currentTime;
 
         if (type === 'plop') {
+            // Softer, more "water-touch" using a quick lowpass and an attack+ring tail
+            for(let i=0; i<2; i++) {
+                const osc = state.audioCtx.createOscillator();
+                const gain = state.audioCtx.createGain();
+                osc.type = i===0 ? 'sine' : 'triangle';
+                let baseF = 320 + i*35; // harmonic
+                osc.frequency.setValueAtTime(baseF, t);
+                osc.frequency.linearRampToValueAtTime(baseF+18, t+0.04);
+                osc.frequency.exponentialRampToValueAtTime(90, t + 0.3 + i*0.07);
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(0.13 + 0.05*i, t + 0.013);
+                gain.gain.exponentialRampToValueAtTime(0.02, t + 0.18+0.08*i);
+                osc.connect(gain).connect(state.gainNode);
+                osc.start(t);
+                osc.stop(t + 0.21+0.09*i);
+            }
+        } else if (type === 'splash') {
+            // Already pretty good
             const osc = state.audioCtx.createOscillator();
             const gain = state.audioCtx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(400, t);
-            osc.frequency.exponentialRampToValueAtTime(600, t + 0.1);
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(180, t); 
+            osc.frequency.exponentialRampToValueAtTime(370, t + 0.12); 
             gain.gain.setValueAtTime(0, t);
-            gain.gain.linearRampToValueAtTime(0.8, t + 0.01);
-            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
+            gain.gain.linearRampToValueAtTime(0.08, t + 0.015);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.22);
             osc.connect(gain).connect(state.gainNode);
             osc.start(t);
             osc.stop(t + 0.25);
-        }
-        else if (type === 'splash') {
-            const osc = state.audioCtx.createOscillator();
-            const gain = state.audioCtx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(300, t); 
-            osc.frequency.exponentialRampToValueAtTime(500, t + 0.1); 
-            gain.gain.setValueAtTime(0, t);
-            gain.gain.linearRampToValueAtTime(0.6, t + 0.01);
-            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
-            osc.connect(gain).connect(state.gainNode);
-            osc.start(t);
-            osc.stop(t + 0.35);
-        }
-        else if (type === 'chomp') {
+        } else if (type === 'chomp') {
             const osc = state.audioCtx.createOscillator();
             const gain = state.audioCtx.createGain();
             osc.type = 'sine'; 
@@ -215,10 +241,11 @@
         update() { this.age++; if(this.size < this.targetSize) this.size += 0.5;}
     }
     function drawFishTexture(ctx, x, y, size, typeSeed, col) {
-        const bodyGradient = ctx.createRadialGradient(x, y, size*0.2, x, y, size*1.05);
-        bodyGradient.addColorStop(0, 'rgba(255,255,255,0.6)');
-        bodyGradient.addColorStop(0.5, col);
-        bodyGradient.addColorStop(1, 'rgba(0,0,0,0.15)');
+        // Pastel shading: softer highlight
+        const bodyGradient = ctx.createRadialGradient(x, y, size*0.25, x, y, size*1.08);
+        bodyGradient.addColorStop(0, 'rgba(250,250,255,0.65)');
+        bodyGradient.addColorStop(0.60, col);
+        bodyGradient.addColorStop(0.93, 'rgba(0,0,0,0.11)');
         ctx.save();
         ctx.beginPath();
         ctx.arc(x, y, size, 0, Math.PI*2);
@@ -226,28 +253,25 @@
         ctx.globalAlpha = 1;
         ctx.fill();
         ctx.globalAlpha = 1.0;
-        const sCount = 3 + (typeSeed%6);
+        const sCount = 3 + (typeSeed%5);
         for(let j=0; j<sCount; j++) {
             ctx.save();
-            ctx.globalAlpha = 0.18 + Math.random()*0.04;
+            ctx.globalAlpha = 0.12 + Math.random()*0.055;
             ctx.beginPath();
             ctx.arc(
-                x + Math.cos(j+typeSeed) * size*0.4, 
-                y + Math.sin(j+typeSeed*1.3) * size*0.36, 
-                size*0.16, 0, Math.PI*2);
-            ctx.fillStyle = 'rgba(255,255,255,0.25)';
+                x + Math.cos(j+typeSeed) * size*0.37, 
+                y + Math.sin(j+typeSeed*1.27) * size*0.33, 
+                size*0.14, 0, Math.PI*2);
+            ctx.fillStyle = 'rgba(255,255,255,0.23)';
             ctx.closePath();
             ctx.fill();
             ctx.restore();
         }
         ctx.restore();
     }
-
-    // --- FISH: Swerve/idle turning timer logic added here ---
+    // --- FISH: Pastel, variety, no green, idle swerve preserved ---
     class Fish {
-        constructor() {
-            this.reset();
-        }
+        constructor() { this.reset(); }
         reset() {
             this.x = Math.random() * state.width;
             this.y = Math.random() * state.height;
@@ -255,32 +279,31 @@
             this.speed = CONFIG.baseSpeed + Math.random() * 0.5;
             this.size = state.isMobile ? 18 + Math.random() * 10 : 12 + Math.random() * 10;
             this.wiggle = Math.random() * 10;
-            this.typeSeed = Math.floor(Math.random()*50);
-            const r = Math.random();
-            if (r < 0.2) { this.col = '#f0f0f0'; this.spots = '#ff4400'; }
-            else if (r < 0.35) { this.col = '#ffaa00'; this.spots = '#ffaa00'; }
-            else if (r < 0.5) { this.col = '#ffffff'; this.spots = 'tancho'; }
-            else if (r < 0.65) { this.col = '#ffdd44'; this.spots = '#222222'; }
-            else if (r < 0.8) { this.col = '#7799aa'; this.spots = '#335566'; }
-            else { this.col = '#222222'; this.spots = '#ff4400'; }
+            this.typeSeed = Math.floor(Math.random()*100);
+
+            // Pick a pastel color set (no dull/unpopular)
+            // One in ten is classic white with "tancho"
+            if (Math.random()<0.13) {
+                this.col = '#fff';
+                this.spots = 'tancho';
+            } else {
+                const fishvar = pastelFishes[Math.floor(Math.random()*pastelFishes.length)];
+                this.col = fishvar.col;
+                this.spots = fishvar.spots;
+            }
             this.trail = [];
             for(let i=0; i<10; i++) this.trail.push({x:this.x, y:this.y});
-
-            // --- Idle Swerve ("wander") timer and direction ---
             this.idleSwerveTimer = 0;
             this.idleSwerveInterval = this.randomInterval();
-            this.idleSwerveAngle = 0; // in radians per frame
+            this.swerveState = undefined;
         }
         randomInterval() {
-            // Between 2 and 5 seconds
             return 2 + Math.random()*3;
         }
         randomIdleTurn() {
-            // Random left/right by 15-60 degrees
             const deg = 15 + Math.random()*45;
             const sign = Math.random()<0.5 ? 1 : -1;
-            // smooth swerve over a duration (~0.5s), so angle per update will be small and cumulative
-            const swerveDuration = 0.5 + Math.random()*0.4; // 0.5 to 0.9s
+            const swerveDuration = 0.5 + Math.random()*0.4;
             return { amount: sign * deg * Math.PI/180, duration: swerveDuration };
         }
         update(ix, iy, delta=1/60) {
@@ -288,13 +311,9 @@
             let targetAngle = this.angle;
             let targetSpeed = CONFIG.baseSpeed;
             let isFleeing = false;
-
-            // IDLE SWERVE LOGIC, applies only when not fleeing and not chasing food
             let doWander = (!state.feedingMode && ix == null && iy == null) || (state.feedingMode && state.food.length==0);
-
             if (doWander) {
                 this.idleSwerveTimer += delta;
-                // If no current swerve or swerve finished, select a new random swerve interval/turn
                 if (this.idleSwerveTimer > this.idleSwerveInterval || typeof this.swerveState === 'undefined') {
                     let swv = this.randomIdleTurn();
                     this.swerveState = {
@@ -307,7 +326,6 @@
                     this.idleSwerveTimer = 0;
                     this.idleSwerveInterval = this.randomInterval();
                 }
-                // If currently turning, increment swerve progress
                 if (this.swerveState && this.swerveState.time < this.swerveState.duration) {
                     let dt = Math.min(delta, this.swerveState.duration-this.swerveState.time);
                     targetAngle += this.swerveState.angleRate * dt;
@@ -317,8 +335,6 @@
                 this.idleSwerveTimer = 0;
                 this.swerveState = undefined;
             }
-
-            // BEHAVIOR 1: Flee (Optimized Math)
             if (!state.feedingMode && ix !== null) {
                 const dx = this.x - ix;
                 const dy = this.y - iy;
@@ -331,7 +347,6 @@
                     targetAngle += (Math.random()-0.5) * 0.8;
                 }
             }
-            // BEHAVIOR 2: Seek Food (Optimized Math)
             if (!isFleeing && state.food.length > 0) {
                 let nearestFood = null;
                 let nearestDistSq = 99999999;
@@ -385,7 +400,7 @@
                 curr.x = prev.x - Math.cos(ang) * segLen;
                 curr.y = prev.y - Math.sin(ang) * segLen;
             }
-            this.wiggle += (0.2 + (this.speed * 0.15)) * speedMul;
+            this.wiggle += (0.22 + (this.speed * 0.13)) * speedMul;
         }
         draw(ctx) {
             const head = this.trail[0];
@@ -399,7 +414,7 @@
             ctx.restore();
         }
         drawBody(ctx, isShadow, angle) {
-            ctx.fillStyle = isShadow ? 'rgba(0,0,0,0.4)' : this.col;
+            ctx.fillStyle = isShadow ? 'rgba(0,0,0,0.33)' : this.col;
             const finWag = Math.sin(this.wiggle)*0.6;
             const finS = this.size * 1.3;
             ctx.save();
@@ -411,7 +426,7 @@
             ctx.lineTo(0,0);
             ctx.quadraticCurveTo(-5, finS, -finS, finS/2 - (finWag*5));
             ctx.lineTo(0,0);
-            if (!isShadow) ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            if (!isShadow) ctx.fillStyle = 'rgba(255,255,255,0.5)';
             ctx.fill();
             ctx.restore();
 
@@ -422,7 +437,7 @@
                 ctx.beginPath();
                 ctx.arc(t.x, t.y, r, 0, Math.PI*2);
                 if (isShadow) { 
-                    ctx.fillStyle = 'rgba(0,0,0,0.4)'; 
+                    ctx.fillStyle = 'rgba(0,0,0,0.33)'; 
                     ctx.fill();
                 } else {
                     drawFishTexture(ctx, t.x, t.y, r, this.typeSeed + i, this.col);
@@ -430,7 +445,7 @@
                         if (i === 0) {
                             ctx.beginPath();
                             ctx.arc(t.x, t.y, r*0.6, 0, Math.PI*2);
-                            ctx.fillStyle = '#ff0000';
+                            ctx.fillStyle = tanchoRed;
                             ctx.fill();
                         }
                     } else if (i % 3 === 0 || i === 0) {
@@ -439,7 +454,7 @@
                         ctx.beginPath();
                         ctx.arc(t.x, t.y, r*0.8, 0, Math.PI*2);
                         ctx.fillStyle = this.spots;
-                        ctx.globalAlpha = 0.35 + 0.18 * Math.sin(this.typeSeed+i);
+                        ctx.globalAlpha = 0.29 + 0.19 * Math.sin(this.typeSeed+i);
                         ctx.fill();
                     }
                     ctx.globalAlpha = 1;
@@ -456,7 +471,6 @@
             }
         }
     }
-
     class Wave {
         constructor(x, y, dx, dy) { this.x = x; this.y = y; this.dx = dx; this.dy = dy; this.age = 0; this.life = 100; }
         update(delta=1/60) {
@@ -471,22 +485,22 @@
             const spread = 20 + (this.age * 2.2);
             const px = -this.dy * spread; 
             const py = this.dx * spread;
-            const bright = state.nightMode ? '120, 180, 255' : '220, 255, 255';
-            const dark = state.nightMode ? '0,0,0' : '0,20,40';
+            const bright = state.nightMode ? '130, 210, 255' : '190, 255, 252';
+            const dark = state.nightMode ? '2,22,25' : '6,32,38';
 
             ctx.lineCap = 'round';
             ctx.beginPath();
             ctx.moveTo(this.x - px - 3, this.y - py + 3);
             ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x + px - 3, this.y + py + 3);
             ctx.lineWidth = 10 * alpha;
-            ctx.strokeStyle = `rgba(${dark}, ${alpha * 0.3})`;
+            ctx.strokeStyle = `rgba(${dark}, ${alpha * 0.32})`;
             ctx.stroke();
 
             ctx.beginPath();
             ctx.moveTo(this.x - px, this.y - py);
             ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x + px, this.y + py);
             ctx.lineWidth = 5 * alpha;
-            ctx.strokeStyle = `rgba(${bright}, ${alpha * 0.7})`;
+            ctx.strokeStyle = `rgba(${bright}, ${alpha * 0.69})`;
             ctx.stroke(); 
         }
     }
@@ -524,12 +538,11 @@
         const palette = state.nightMode ? CONFIG.colors.night : CONFIG.colors.day;
         const cx = state.width/2, cy = state.height/2;
         let grad;
-        // Mobile: Adjusted for slightly more desktop-like zoom, not as tight ("zoomed out a tad")
         let cxM = cx, cyM = cy, maxR = Math.max(state.width, state.height);
         if (state.isMobile) {
-            cxM = state.width / 2.05;          // Slightly closer to center
-            cyM = state.height * 0.55;         // Lower center
-            maxR = Math.max(state.width, state.height) * 1.1; // <- more zoomed out (was 0.8)
+            cxM = state.width / 2.05;
+            cyM = state.height * 0.55;
+            maxR = Math.max(state.width, state.height) * 1.1;
         }
         grad = ctx.createRadialGradient(cxM, cyM, 10, cxM, cyM, maxR);
         grad.addColorStop(0, palette.shallow);
@@ -545,9 +558,9 @@
         const time = t * 0.0003;
         const causticLayers = state.isMobile ? 3 : 5;
         for(let i = 0; i < causticLayers; i++) {
-            const offsetX = Math.sin(time + i) * (state.isMobile ? 140 : 200); // slight tweak for wider pond
+            const offsetX = Math.sin(time + i) * (state.isMobile ? 140 : 200);
             const offsetY = Math.cos(time * 0.7 + i) * (state.isMobile ? 110 : 150);
-            const size = (state.isMobile ? 155 : 150) + Math.sin(time * 0.5 + i)*50; // larger for mobile
+            const size = (state.isMobile ? 155 : 150) + Math.sin(time * 0.5 + i)*50;
             ctx.beginPath();
             ctx.ellipse(cx + offsetX, cy + offsetY, size, size * 0.6, time + i, 0, Math.PI * 2);
             ctx.fill();
@@ -575,7 +588,7 @@
         const iy = state.input.active ? state.input.y : null;
         state.fish.forEach(f => { f.update(ix, iy, delta); f.draw(ctx); });
 
-        ctx.fillStyle = state.nightMode ? 'rgba(0, 5, 15, 0.4)' : 'rgba(0, 30, 40, 0.1)';
+        ctx.fillStyle = state.nightMode ? 'rgba(0, 12, 24, 0.34)' : 'rgba(2, 29, 44, 0.1)';
         ctx.fillRect(0,0,state.width, state.height);
 
         if(state.waves.length > CONFIG.maxWaves) {
