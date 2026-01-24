@@ -210,7 +210,7 @@
                 const osc = state.audioCtx.createOscillator();
                 const gain = state.audioCtx.createGain();
                 osc.type = 'sine';
-                osc.frequency.setValueAtTime(400, t);
+                osc.frequency.setValueAtTime(, t);
                 osc.frequency.exponentialRampToValueAtTime(600, t + 0.1);
                 gain.gain.setValueAtTime(0, t);
                 gain.gain.linearRampToValueAtTime(0.8, t + 0.01);
@@ -337,10 +337,10 @@
                         const d = Math.hypot(p.x - this.x, p.y - this.y);
                         if(d < nearestDist) { nearestDist = d; nearestFood = p; }
                     });
-                    if (nearestFood && nearestDist < 400) {
+                    if (nearestFood && nearestDist < 500) {
                         targetAngle = Math.atan2(nearestFood.y - this.y, nearestFood.x - this.x);
                         targetSpeed = 3.5;
-                        if (nearestDist < 10) {
+                        if (nearestDist < 20) {
                             state.food = state.food.filter(f => f !== nearestFood);
                             playSound('chomp');
                             this.wiggle += 10;
