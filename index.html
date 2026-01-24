@@ -16,7 +16,7 @@
             -webkit-user-select: none;
             user-select: none;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        <!DOCTYPE html>
+        }
 
         canvas { 
             display: block; 
@@ -84,11 +84,11 @@
             </svg>
         </div>
 
-        <div id="btn-mode" class="btn active" title="Toggle Mode">
-            <svg id="icon-hand" viewBox="0 0 24 24" style="display:none">
-                <path d="M23 5.5V20c0 2.2-1.8 4-4 4h-7.3c-1.08 0-2.1-.43-2.85-1.19L1 14.83c-.27-.27-.27-.71 0-.98l.59-.59c.27-.27.72-.27.99 0L6 16.7V5c0-.83.67-1.5 1.5-1.5S9 4.17 9 5v6.5h1.5V3c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v8.5H15V4.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5v9H19V5.5c0-.83.67-1.5 1.5-1.5S22 4.67 22 5.5z"/>
+        <div id="btn-mode" class="btn" title="Toggle Mode">
+            <svg id="icon-water" viewBox="0 0 24 24">
+                <path d="M12 20c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-18C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2m0 5c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5z"/>
             </svg>
-            <svg id="icon-food" viewBox="0 0 24 24">
+            <svg id="icon-food" viewBox="0 0 24 24" style="display:none">
                 <path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z"/>
             </svg>
         </div>
@@ -104,31 +104,11 @@
 
     <script>
         // --- CONFIGURATION ---
-        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        // Responsive fish count
-        let fishCount;
-        if (window.innerWidth < 500) fishCount = 3;
-        else if (window.innerWidth < 900) fishCount = 4;
-        else fishCount = 20;
         const CONFIG = {
-            fishCount,
+            fishCount: 20,
             baseSpeed: 1.0,
-            fleeSpeed: isMobile ? 4.0 : 9.0,  // Reduced from 5.0 to 4.0
-            fleeRadius: isMobile ? 250 : 350,  // Smaller flee radius on mobile
-            foodSpeed: isMobile ? 2.5 : 3.5,  // Reduced from 3.0 to 2.5
-            maxFood: isMobile ? 8 : 40,  // Further reduced from 10 to 8
-            maxBubbles: isMobile ? 3 : 30,  // Further reduced from 5 to 3
-            maxParticles: isMobile ? 3 : 50,  // Further reduced from 5 to 3
-            renderQuality: isMobile ? 'low' : 'high',
-            targetFPS: isMobile ? 30 : 60,
-            enableGradients: !isMobile,      // Disable gradients on mobile
-            enableCaustics: !isMobile,       // Disable caustics on mobile
-            enableStars: true,               // Enable stars on all devices
-            enableShadows: !isMobile,        // NEW: Disable shadows on mobile
-            enableScales: !isMobile,         // NEW: Disable scale details on mobile
-            enableWaves: true,               // Always enable wave effects, even on mobile
-            enableFishTexture: true,         // NEW: Enable simple texture on fish
-            simplifyPhysics: isMobile,       // NEW: Simplify physics calculations on mobile
+            fleeSpeed: 9.0,
+            fleeRadius: 350,
             colors: {
                 day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
                 night: { deep: '#000a12', shallow: '#001a24', caustic: 'rgba(100,150,255,0.04)' }
@@ -141,33 +121,22 @@
             waves: [],
             fish: [],
             food: [],
-            bubbles: [],
-            particles: [],
-            stars: [],
             input: { x: null, y: null, active: false },
             
             // Flags
             audioEnabled: false,
-            feedingMode: true,
-            nightMode: true,
+            feedingMode: false,
+            nightMode: false,
             running: true,
 
             // Audio Resources
             audioCtx: null,
             gainNode: null,
-            animationId: null,
-            
-            // Frame timing for FPS limiting
-            lastFrameTime: 0,
-            frameInterval: 1000 / CONFIG.targetFPS
+            animationId: null
         };
 
         const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d', { 
-            alpha: false,
-            desynchronized: true,  // Reduces latency
-            willReadFrequently: false  // Optimize for writing, not reading
-        });
+        const ctx = canvas.getContext('2d', { alpha: false });
 
         // ============================================
         // 1. IMPROVED AUDIO ENGINE (SINE WAVE BASED)
@@ -279,125 +248,6 @@
         // 2. GAME ENTITIES
         // ============================================
         
-        // Star Class (Night Sky Reflections)
-        class Star {
-            constructor() {
-                this.x = Math.random() * state.width;
-                this.y = Math.random() * state.height * 0.6; // Upper portion
-                this.size = 1 + Math.random() * 2.5; // Larger stars
-                this.twinkleSpeed = 0.02 + Math.random() * 0.03;
-                this.twinklePhase = Math.random() * Math.PI * 2;
-                this.brightness = 0.6 + Math.random() * 0.4; // Brighter stars
-            }
-            update() {
-                this.twinklePhase += this.twinkleSpeed;
-            }
-            draw(ctx) {
-                const twinkle = (Math.sin(this.twinklePhase) + 1) / 2;
-                const alpha = this.brightness * twinkle * 0.95; // More visible
-                
-                ctx.save();
-                ctx.globalCompositeOperation = 'lighter';
-                
-                // Star glow - enhanced
-                ctx.shadowBlur = 8 + twinkle * 12;
-                ctx.shadowColor = `rgba(220, 235, 255, ${alpha})`;
-                ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // Cross sparkle effect for all stars
-                if (this.brightness > 0.5) {
-                    ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.7})`;
-                    ctx.lineWidth = 1;
-                    const len = this.size * 4 * twinkle;
-                    ctx.beginPath();
-                    ctx.moveTo(this.x - len, this.y);
-                    ctx.lineTo(this.x + len, this.y);
-                    ctx.moveTo(this.x, this.y - len);
-                    ctx.lineTo(this.x, this.y + len);
-                    ctx.stroke();
-                }
-                
-                ctx.restore();
-            }
-        }
-        
-        // Bubble Class
-        class Bubble {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.size = 2 + Math.random() * 4;
-                this.speed = 0.5 + Math.random() * 1.5;
-                this.wobble = Math.random() * Math.PI * 2;
-                this.wobbleSpeed = 0.02 + Math.random() * 0.03;
-            }
-            update() {
-                this.y -= this.speed;
-                this.wobble += this.wobbleSpeed;
-                this.x += Math.sin(this.wobble) * 0.5;
-            }
-            draw(ctx) {
-                if (CONFIG.enableGradients) {
-                    const gradient = ctx.createRadialGradient(
-                        this.x - this.size * 0.3, this.y - this.size * 0.3, 0,
-                        this.x, this.y, this.size
-                    );
-                    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
-                    gradient.addColorStop(0.5, 'rgba(200, 240, 255, 0.4)');
-                    gradient.addColorStop(1, 'rgba(100, 200, 255, 0.1)');
-                    ctx.fillStyle = gradient;
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                    ctx.fill();
-                    
-                    // Highlight
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-                    ctx.beginPath();
-                    ctx.arc(this.x - this.size * 0.3, this.y - this.size * 0.3, this.size * 0.3, 0, Math.PI * 2);
-                    ctx.fill();
-                } else {
-                    // Ultra-simple rendering for mobile - single draw call
-                    ctx.fillStyle = 'rgba(200, 230, 255, 0.5)';
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            }
-        }
-
-        // Particle Class (for eating effects)
-        class Particle {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                const angle = Math.random() * Math.PI * 2;
-                const speed = 2 + Math.random() * 3;
-                this.vx = Math.cos(angle) * speed;
-                this.vy = Math.sin(angle) * speed;
-                this.life = 30;
-                this.age = 0;
-                this.size = 2 + Math.random() * 2;
-                this.color = `hsl(${30 + Math.random() * 30}, 80%, ${50 + Math.random() * 20}%)`;
-            }
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                this.vx *= 0.95;
-                this.vy *= 0.95;
-                this.age++;
-            }
-            draw(ctx) {
-                const alpha = 1 - (this.age / this.life);
-                ctx.fillStyle = this.color.replace(')', `, ${alpha})`).replace('hsl', 'hsla');
-                ctx.beginPath();
-                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        }
-
         // Food Pellet Class
         class Pellet {
             constructor(x, y) {
@@ -428,36 +278,21 @@
                 this.y = Math.random() * state.height;
                 this.angle = Math.random() * Math.PI * 2;
                 this.speed = CONFIG.baseSpeed + Math.random() * 0.5;
-                // Make fish longer and add more variety
-                this.size = 14 + Math.random() * 18;  // Increased max for longer bodies
+                this.size = 12 + Math.random() * 10;
                 this.wiggle = Math.random() * 10;
+                
+                // Random Color Assignment
+                const r = Math.random();
+                if (r < 0.2) { this.col = '#f0f0f0'; this.spots = '#ff4400'; } // Kohaku
+                else if (r < 0.35) { this.col = '#ffaa00'; this.spots = '#ffaa00'; } // Gold
+                else if (r < 0.5) { this.col = '#ffffff'; this.spots = 'tancho'; } // Tancho
+                else if (r < 0.65) { this.col = '#ffdd44'; this.spots = '#222222'; } // Ki Utsuri
+                else if (r < 0.8) { this.col = '#7799aa'; this.spots = '#335566'; } // Asagi
+                else { this.col = '#222222'; this.spots = '#ff4400'; } // Showa
 
-                // Expanded color and spot variety
-                const patterns = [
-                    {col:'#f0f0f0', spots:'#ff4400'}, // Kohaku
-                    {col:'#ffaa00', spots:'#ffaa00'}, // Gold
-                    {col:'#ffffff', spots:'tancho'}, // Tancho
-                    {col:'#ffdd44', spots:'#222222'}, // Ki Utsuri
-                    {col:'#7799aa', spots:'#335566'}, // Asagi
-                    {col:'#222222', spots:'#ff4400'}, // Showa
-                    {col:'#ffffff', spots:'#ff6600'}, // Orange & White
-                    {col:'#ff8844', spots:'#ffffff'}, // Coral
-                    {col:'#6688bb', spots:'#ffffff'}, // Blue & White
-                    {col:'#e0e0e0', spots:'#ffcc00'}, // Platinum
-                    {col:'#ffcc00', spots:'#222222'}, // Lemon Black
-                    {col:'#ff6600', spots:'#222222'}, // Orange Black
-                    {col:'#335566', spots:'#ffcc00'}, // Steel Lemon
-                    {col:'#ff4400', spots:'#ffffff'}, // Red White
-                    {col:'#222222', spots:'#e0e0e0'}, // Black Platinum
-                ];
-                const pick = patterns[Math.floor(Math.random()*patterns.length)];
-                this.col = pick.col;
-                this.spots = pick.spots;
-
-                // Tail segments: longer fish get more segments
-                const tailSegments = CONFIG.enableGradients ? Math.floor(12 + Math.random()*4) : Math.floor(4 + Math.random()*2);
+                // Initialize tail segments
                 this.trail = [];
-                for(let i=0; i<tailSegments; i++) this.trail.push({x:this.x, y:this.y});
+                for(let i=0; i<10; i++) this.trail.push({x:this.x, y:this.y});
             }
 
             update(ix, iy) {
@@ -470,10 +305,7 @@
                     const dist = Math.hypot(this.x - ix, this.y - iy);
                     if (dist < CONFIG.fleeRadius) {
                         isFleeing = true;
-                        // Figure-8 bias: add a sinusoidal offset to the angle
-                        const t = Date.now() * 0.002;
-                        const figure8 = Math.sin(t) * Math.cos(t) * 1.2;
-                        targetAngle = Math.atan2(this.y - iy, this.x - ix) + figure8;
+                        targetAngle = Math.atan2(this.y - iy, this.x - ix);
                         targetSpeed = CONFIG.fleeSpeed;
                         // Add randomness to panic
                         targetAngle += (Math.random()-0.5) * 0.8; 
@@ -492,33 +324,22 @@
                     // Only notice food within 300px
                     if (nearestFood && nearestDist < 300) {
                         targetAngle = Math.atan2(nearestFood.y - this.y, nearestFood.x - this.x);
-                        targetSpeed = CONFIG.foodSpeed;
+                        targetSpeed = 3.5;
                         
                         // Eat check
                         if (nearestDist < 10) {
                             state.food = state.food.filter(f => f !== nearestFood);
                             playSound('chomp'); // Play new Gulp sound
                             this.wiggle += 10; // Excited wiggle
-                            
-                            // Create eating particles (fewer on mobile)
-                            const particleCount = CONFIG.enableGradients ? 8 : 2;  // Reduced from 3 to 2
-                            for(let i = 0; i < particleCount; i++) {
-                                state.particles.push(new Particle(nearestFood.x, nearestFood.y));
-                            }
                         }
                     }
                 }
 
-                // Physics & Movement (simplified for low-end devices)
+                // Physics & Movement
                 let diff = targetAngle - this.angle;
                 // Normalize angle
-                if (CONFIG.simplifyPhysics) {
-                    // Simpler angle normalization
-                    diff = ((diff + Math.PI) % (Math.PI * 2)) - Math.PI;
-                } else {
-                    while (diff < -Math.PI) diff += Math.PI * 2;
-                    while (diff > Math.PI) diff -= Math.PI * 2;
-                }
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                while (diff > Math.PI) diff -= Math.PI * 2;
                 
                 const turnRate = isFleeing ? 0.15 : 0.05;
                 this.angle += diff * turnRate;
@@ -549,57 +370,19 @@
 
             draw(ctx) {
                 const head = this.trail[0];
-                const tailIdx = Math.min(4, this.trail.length - 1);
-                const body = this.trail[tailIdx];
+                const body = this.trail[4];
                 const angle = Math.atan2(head.y - body.y, head.x - body.x);
                 
-                // Draw Shadow only on high quality AND if enabled
-                if (CONFIG.enableShadows && CONFIG.renderQuality === 'high') {
-                    ctx.save();
-                    ctx.translate(15, 15);
-                    this.drawBody(ctx, true, angle);
-                    ctx.restore();
-                }
+                // Draw Shadow first
+                ctx.save();
+                ctx.translate(15, 15);
+                this.drawBody(ctx, true, angle);
+                ctx.restore();
 
-                // Improved mobile fish rendering: more tapered, fish-like body
-                if (isMobile) {
-                    ctx.save();
-                    ctx.translate(this.x, this.y);
-                    ctx.rotate(angle);
-                    ctx.globalAlpha = 0.85;
-                    ctx.beginPath();
-                    // Head
-                    ctx.moveTo(0, 0);
-                    // Body curve (tapered)
-                    ctx.bezierCurveTo(
-                        this.size * 0.5, -this.size * 0.4,
-                        this.size * 1.2, -this.size * 0.2,
-                        this.size * 1.6, 0
-                    );
-                    ctx.bezierCurveTo(
-                        this.size * 1.2, this.size * 0.2,
-                        this.size * 0.5, this.size * 0.4,
-                        0, 0
-                    );
-                    ctx.fillStyle = this.col;
-                    ctx.shadowColor = '#0008';
-                    ctx.shadowBlur = 8;
-                    ctx.fill();
-                    // Tail fin
-                    ctx.beginPath();
-                    ctx.moveTo(this.size * 1.6, 0);
-                    ctx.lineTo(this.size * 1.9, -this.size * 0.25);
-                    ctx.lineTo(this.size * 1.9, this.size * 0.25);
-                    ctx.closePath();
-                    ctx.fillStyle = '#fff8';
-                    ctx.globalAlpha = 0.6;
-                    ctx.fill();
-                    ctx.restore();
-                } else {
-                    ctx.save();
-                    this.drawBody(ctx, false, angle);
-                    ctx.restore();
-                }
+                // Draw Fish
+                ctx.save();
+                this.drawBody(ctx, false, angle);
+                ctx.restore();
             }
 
             drawBody(ctx, isShadow, angle) {
@@ -617,16 +400,7 @@
                 ctx.lineTo(0,0);
                 ctx.quadraticCurveTo(-5, finS, -finS, finS/2 - (finWag*5));
                 ctx.lineTo(0,0);
-                if (!isShadow) {
-                    if (CONFIG.enableGradients) {
-                        const finGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, finS);
-                        finGrad.addColorStop(0, 'rgba(255,255,255,0.8)');
-                        finGrad.addColorStop(1, 'rgba(255,255,255,0.3)');
-                        ctx.fillStyle = finGrad;
-                    } else {
-                        ctx.fillStyle = 'rgba(255,255,255,0.5)';
-                    }
-                }
+                if (!isShadow) ctx.fillStyle = 'rgba(255,255,255,0.6)';
                 ctx.fill();
                 ctx.restore();
 
@@ -642,63 +416,10 @@
                         ctx.fillStyle = 'rgba(0,0,0,0.4)'; 
                     } else {
                         // Pattern logic
-                        let baseColor;
-                        if (this.spots === 'tancho') baseColor = (i === 0) ? '#ff0000' : this.col;
-                        else baseColor = (i%3===0 || i===0) ? this.col : this.spots;
-                        
-                        // Use gradient only on high-end devices
-                        if (CONFIG.enableGradients) {
-                            const grad = ctx.createRadialGradient(t.x - r*0.3, t.y - r*0.3, 0, t.x, t.y, r);
-                            grad.addColorStop(0, this.lightenColor(baseColor, 20));
-                            grad.addColorStop(1, baseColor);
-                            ctx.fillStyle = grad;
-                        } else {
-                            ctx.fillStyle = baseColor;
-                        }
+                        if (this.spots === 'tancho') ctx.fillStyle = (i === 0) ? '#ff0000' : this.col;
+                        else ctx.fillStyle = (i%3===0 || i===0) ? this.col : this.spots;
                     }
                     ctx.fill();
-                    
-                    // Add enhanced texture (spots and patterns) - more variety
-                    if (!isShadow && i > 0 && CONFIG.enableFishTexture) {
-                        // Multiple texture dots for richer appearance
-                        if (i % 2 === 0) {
-                            ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
-                            ctx.beginPath();
-                            ctx.arc(t.x + r * 0.3, t.y + r * 0.2, r * 0.2, 0, Math.PI * 2);
-                            ctx.fill();
-                            ctx.beginPath();
-                            ctx.arc(t.x - r * 0.2, t.y - r * 0.3, r * 0.18, 0, Math.PI * 2);
-                            ctx.fill();
-                            // Add third highlight spot
-                            ctx.beginPath();
-                            ctx.arc(t.x - r * 0.1, t.y + r * 0.35, r * 0.12, 0, Math.PI * 2);
-                            ctx.fill();
-                        }
-                        // Add subtle stripe texture with variety
-                        if (i % 3 === 0) {
-                            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
-                            ctx.beginPath();
-                            ctx.arc(t.x, t.y + r * 0.4, r * 0.25, 0, Math.PI * 2);
-                            ctx.fill();
-                            // Add contrasting spot
-                            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-                            ctx.beginPath();
-                            ctx.arc(t.x + r * 0.35, t.y - r * 0.15, r * 0.15, 0, Math.PI * 2);
-                            ctx.fill();
-                        }
-                        // Add random metallic highlights
-                        if (i === 1 || i === 2) {
-                            ctx.fillStyle = 'rgba(255, 255, 200, 0.3)';
-                            ctx.beginPath();
-                            ctx.arc(t.x + r * 0.4, t.y, r * 0.1, 0, Math.PI * 2);
-                            ctx.fill();
-                        }
-                    }
-                    
-                    // Draw scales (skip shadow, eyes, and on mobile for performance)
-                    if (!isShadow && i > 0 && CONFIG.enableScales && CONFIG.renderQuality === 'high') {
-                        this.drawScales(ctx, t.x, t.y, r, angle);
-                    }
                 });
                 
                 // Eyes
@@ -709,49 +430,8 @@
                     ctx.fillStyle = 'black';
                     ctx.beginPath(); ctx.arc(4, -this.size*0.6, 2, 0, Math.PI*2); ctx.fill();
                     ctx.beginPath(); ctx.arc(4, this.size*0.6, 2, 0, Math.PI*2); ctx.fill();
-                    // Eye shine (skip on low-end devices)
-                    if (CONFIG.enableGradients) {
-                        ctx.fillStyle = 'rgba(255,255,255,0.8)';
-                        ctx.beginPath(); ctx.arc(4.5, -this.size*0.6 - 0.5, 0.8, 0, Math.PI*2); ctx.fill();
-                        ctx.beginPath(); ctx.arc(4.5, this.size*0.6 - 0.5, 0.8, 0, Math.PI*2); ctx.fill();
-                    }
                     ctx.restore();
                 }
-            }
-            
-            drawScales(ctx, x, y, radius, fishAngle) {
-                ctx.save();
-                ctx.translate(x, y);
-                ctx.rotate(fishAngle);
-                
-                // Draw a pattern of overlapping scale arcs
-                const scaleSize = radius * 0.4;
-                const rows = 2;
-                const cols = 3;
-                
-                for (let row = 0; row < rows; row++) {
-                    for (let col = 0; col < cols; col++) {
-                        const offsetX = (col - 1) * scaleSize * 0.6;
-                        const offsetY = (row - 0.5) * scaleSize * 0.5;
-                        
-                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
-                        ctx.lineWidth = 0.5;
-                        ctx.beginPath();
-                        ctx.arc(offsetX, offsetY, scaleSize * 0.5, 0, Math.PI * 2);
-                        ctx.stroke();
-                    }
-                }
-                
-                ctx.restore();
-            }
-            
-            lightenColor(col, percent) {
-                // Simple color lightening
-                const num = parseInt(col.replace('#',''), 16);
-                const r = Math.min(255, ((num >> 16) & 0xff) + percent);
-                const g = Math.min(255, ((num >> 8) & 0xff) + percent);
-                const b = Math.min(255, (num & 0xff) + percent);
-                return `rgb(${r},${g},${b})`;
             }
         }
 
@@ -769,38 +449,39 @@
             draw(ctx) {
                 const prog = this.age / this.life;
                 if (prog >= 1) return;
-                // Boost visibility for mobile
-                const mobileBoost = isMobile ? 1.7 : 1;
-                const alpha = (1 - prog) * (isMobile ? 1.2 : 1);
-                const spread = (20 + (this.age * 2.2)) * mobileBoost;
+                
+                const alpha = 1 - prog;
+                const spread = 20 + (this.age * 2.2);
+                
                 // Perpendicular vectors for width
                 const px = -this.dy * spread; 
                 const py = this.dx * spread;
+                
                 const bright = state.nightMode ? '120, 180, 255' : '220, 255, 255';
                 const dark = state.nightMode ? '0,0,0' : '0,20,40';
+
                 ctx.lineCap = 'round';
+                
                 // Dark trailing edge (Depth)
                 ctx.beginPath();
                 ctx.moveTo(this.x - px - 3, this.y - py + 3);
                 ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x + px - 3, this.y + py + 3);
-                ctx.lineWidth = (10 * alpha) * mobileBoost;
+                ctx.lineWidth = 10 * alpha;
                 ctx.strokeStyle = `rgba(${dark}, ${alpha * 0.3})`;
                 ctx.stroke();
+
                 // Bright leading edge (Highlight)
                 ctx.beginPath();
                 ctx.moveTo(this.x - px, this.y - py);
                 ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x + px, this.y + py);
-                ctx.lineWidth = (5 * alpha) * mobileBoost;
-                ctx.strokeStyle = `rgba(${bright}, ${alpha * 0.9})`;
-                // Glow effect (skip on mobile)
-                if (CONFIG.enableGradients) {
-                    ctx.shadowBlur = isMobile ? 18 : 10;
-                    ctx.shadowColor = `rgba(${bright}, ${alpha})`;
-                }
+                ctx.lineWidth = 5 * alpha;
+                ctx.strokeStyle = `rgba(${bright}, ${alpha * 0.7})`;
+                
+                // Glow effect
+                ctx.shadowBlur = 10; 
+                ctx.shadowColor = `rgba(${bright}, ${alpha})`;
                 ctx.stroke(); 
-                if (CONFIG.enableGradients) {
-                    ctx.shadowBlur = 0;
-                }
+                ctx.shadowBlur = 0;
             }
         }
 
@@ -812,60 +493,27 @@
             const palette = state.nightMode ? CONFIG.colors.night : CONFIG.colors.day;
             const cx = state.width/2, cy = state.height/2;
             
-            // Background - use gradient only on high-end devices
-            if (CONFIG.enableGradients) {
-                const grad = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.max(state.width, state.height));
-                grad.addColorStop(0, palette.shallow);
-                grad.addColorStop(0.7, palette.deep);
-                grad.addColorStop(1, state.nightMode ? '#000000' : '#001820');
-                ctx.fillStyle = grad;
-            } else {
-                // Solid color for low-end devices
-                ctx.fillStyle = palette.deep;
-            }
+            // Gradient Background
+            const grad = ctx.createRadialGradient(cx, cy, 10, cx, cy, Math.max(state.width, state.height));
+            grad.addColorStop(0, palette.shallow);
+            grad.addColorStop(1, palette.deep);
+            ctx.fillStyle = grad;
             ctx.fillRect(0,0,state.width, state.height);
 
-            // Caustics (Light Rays) - Skip on mobile
-            if (CONFIG.enableCaustics) {
-                ctx.save();
-                ctx.globalCompositeOperation = 'overlay';
-                const time = t * 0.0003;
-                const causticCount = 10;
-                for(let i = 0; i < causticCount; i++) {
-                    const offsetX = Math.sin(time + i * 0.7) * 250;
-                    const offsetY = Math.cos(time * 0.7 + i * 0.5) * 180;
-                    const size = 120 + Math.sin(time * 0.5 + i)*60;
-                    
-                    const causticGrad = ctx.createRadialGradient(
-                        cx + offsetX, cy + offsetY, 0,
-                        cx + offsetX, cy + offsetY, size
-                    );
-                    causticGrad.addColorStop(0, state.nightMode ? 'rgba(100,150,255,0.15)' : 'rgba(255,255,255,0.15)');
-                    causticGrad.addColorStop(1, 'rgba(0,0,0,0)');
-                    ctx.fillStyle = causticGrad;
-                    
-                    ctx.beginPath();
-                    ctx.ellipse(cx + offsetX, cy + offsetY, size, size * 0.6, time + i, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-                ctx.restore();
+            // Caustics (Light Rays)
+            ctx.save();
+            ctx.globalCompositeOperation = 'overlay';
+            ctx.fillStyle = palette.caustic;
+            const time = t * 0.0003;
+            for(let i = 0; i < 7; i++) {
+                const offsetX = Math.sin(time + i) * 200;
+                const offsetY = Math.cos(time * 0.7 + i) * 150;
+                const size = 150 + Math.sin(time * 0.5 + i)*50;
+                ctx.beginPath();
+                ctx.ellipse(cx + offsetX, cy + offsetY, size, size * 0.6, time + i, 0, Math.PI * 2);
+                ctx.fill();
             }
-            
-            // Subtle sparkles on water surface (skip on mobile)
-            // DISABLED: Too expensive even with low probability
-            // if (CONFIG.enableGradients && Math.random() < 0.05) {
-            //     const sparkleX = Math.random() * state.width;
-            //     const sparkleY = Math.random() * state.height;
-            //     ctx.save();
-            //     ctx.globalCompositeOperation = 'lighter';
-            //     ctx.fillStyle = state.nightMode ? 'rgba(150,200,255,0.3)' : 'rgba(255,255,255,0.4)';
-            //     ctx.shadowBlur = 8;
-            //     ctx.shadowColor = ctx.fillStyle;
-            //     ctx.beginPath();
-            //     ctx.arc(sparkleX, sparkleY, 1 + Math.random() * 2, 0, Math.PI * 2);
-            //     ctx.fill();
-            //     ctx.restore();
-            // }
+            ctx.restore();
         }
 
         function init() {
@@ -876,39 +524,15 @@
             // Restore Audio Preference
             if (localStorage.getItem('wb_v12_audio') === 'true') toggleAudio(true);
             
-            // Spawn initial bubbles (fewer on mobile)
-            const initialBubbles = isMobile ? 2 : CONFIG.maxBubbles;  // Start with just 2 on mobile
-            for(let i = 0; i < initialBubbles; i++) {
-                state.bubbles.push(new Bubble(
-                    Math.random() * state.width,
-                    Math.random() * state.height
-                ));
-            }
-            
-            // Create stars for night mode
-            if (CONFIG.enableStars) {
-                const starCount = isMobile ? 15 : 40;  // Reduced star count
-                for(let i = 0; i < starCount; i++) {
-                    state.stars.push(new Star());
-                }
-            }
-            
             // Background Suspension Logic (Saves battery)
             document.addEventListener("visibilitychange", () => {
                 if (document.hidden) {
                     state.running = false;
                     cancelAnimationFrame(state.animationId);
-                    // Properly stop audio to prevent clicks
-                    if(state.audioCtx) {
-                        state.gainNode.gain.setValueAtTime(state.gainNode.gain.value, state.audioCtx.currentTime);
-                        state.gainNode.gain.exponentialRampToValueAtTime(0.001, state.audioCtx.currentTime + 0.1);
-                        setTimeout(() => {
-                            if(state.audioCtx) state.audioCtx.suspend();
-                        }, 150);
-                    }
+                    if(state.audioCtx) state.audioCtx.suspend();
                 } else {
                     state.running = true;
-                    // Do not auto-resume audio to avoid metallic sound
+                    if(state.audioEnabled && state.audioCtx) state.audioCtx.resume();
                     loop();
                 }
             });
@@ -917,99 +541,16 @@
         }
 
         function resize() {
-            const oldWidth = state.width || window.innerWidth;
-            const oldHeight = state.height || window.innerHeight;
-            
             state.width = window.innerWidth;
             state.height = window.innerHeight;
             canvas.width = state.width;
             canvas.height = state.height;
-            
-            // Calculate scale ratios
-            const scaleX = state.width / oldWidth;
-            const scaleY = state.height / oldHeight;
-            
-            // Reposition fish relatively
-            state.fish.forEach(f => {
-                f.x = f.x * scaleX;
-                f.y = f.y * scaleY;
-                // Update trail positions
-                f.trail.forEach(t => {
-                    t.x = t.x * scaleX;
-                    t.y = t.y * scaleY;
-                });
-            });
-            
-            // Reposition food relatively
-            state.food.forEach(p => {
-                p.x = p.x * scaleX;
-                p.y = p.y * scaleY;
-            });
-            
-            // Reposition bubbles relatively
-            state.bubbles.forEach(b => {
-                b.x = b.x * scaleX;
-                b.y = b.y * scaleY;
-            });
-            
-            // Reposition particles relatively
-            state.particles.forEach(p => {
-                p.x = p.x * scaleX;
-                p.y = p.y * scaleY;
-            });
-            
-            // Reposition waves relatively
-            state.waves.forEach(w => {
-                w.x = w.x * scaleX;
-                w.y = w.y * scaleY;
-            });
-            
-            // Reposition stars relatively
-            state.stars.forEach(s => {
-                s.x = s.x * scaleX;
-                s.y = s.y * scaleY;
-            });
         }
 
         function loop() {
             if (!state.running) return;
             
-            // FPS limiting for mobile
-            const now = Date.now();
-            const elapsed = now - state.lastFrameTime;
-            
-            if (elapsed < state.frameInterval) {
-                state.animationId = requestAnimationFrame(loop);
-                return;
-            }
-            
-            state.lastFrameTime = now - (elapsed % state.frameInterval);
-            
-            drawWater(now);
-            
-            // Draw stars if night mode (before bubbles for depth)
-            if (state.nightMode && CONFIG.enableStars) {
-                state.stars.forEach(s => { s.update(); s.draw(ctx); });
-            }
-            
-            // Spawn new bubbles randomly (limited for performance)
-            const bubbleSpawnRate = CONFIG.enableGradients ? 0.1 : 0.01;  // Further reduced from 0.02 to 0.01
-            if (Math.random() < bubbleSpawnRate && state.bubbles.length < CONFIG.maxBubbles) {
-                state.bubbles.push(new Bubble(
-                    Math.random() * state.width,
-                    state.height + 10
-                ));
-            }
-            
-            // Update & Draw Bubbles - batch filtering to reduce iterations
-            for (let i = state.bubbles.length - 1; i >= 0; i--) {
-                if (state.bubbles[i].y < -10) {
-                    state.bubbles.splice(i, 1);
-                } else {
-                    state.bubbles[i].update();
-                    state.bubbles[i].draw(ctx);
-                }
-            }
+            drawWater(Date.now());
             
             // Update & Draw Food
             state.food.forEach(f => { f.update(); f.draw(ctx); });
@@ -1019,45 +560,13 @@
             const iy = state.input.active ? state.input.y : null;
             state.fish.forEach(f => { f.update(ix, iy); f.draw(ctx); });
 
-            // Update & Draw Particles (limited for performance) - batch operations
-            for (let i = state.particles.length - 1; i >= 0; i--) {
-                const p = state.particles[i];
-                if (p.age >= p.life || i >= CONFIG.maxParticles) {
-                    state.particles.splice(i, 1);
-                } else {
-                    p.update();
-                    p.draw(ctx);
-                }
-            }
+            // Water Surface Overlay (Depth effect)
+            ctx.fillStyle = state.nightMode ? 'rgba(0, 5, 15, 0.4)' : 'rgba(0, 30, 40, 0.1)';
+            ctx.fillRect(0,0,state.width, state.height);
 
-            // Water Surface Overlay (Depth effect) with vignette (skip on mobile)
-            // Update & Draw Waves - batch operations (now before vignette)
-            if (CONFIG.enableWaves) {
-                for (let i = state.waves.length - 1; i >= 0; i--) {
-                    const w = state.waves[i];
-                    if (w.age >= w.life) {
-                        state.waves.splice(i, 1);
-                    } else {
-                        w.update();
-                        w.draw(ctx);
-                    }
-                }
-            } else {
-                // Clear waves array on mobile to prevent memory buildup
-                if (state.waves.length > 0) state.waves = [];
-            }
-
-            // Water Surface Overlay (Depth effect) with vignette (skip on mobile)
-            if (CONFIG.enableGradients) {
-                const vignetteGrad = ctx.createRadialGradient(
-                    state.width/2, state.height/2, state.width * 0.3,
-                    state.width/2, state.height/2, state.width * 0.8
-                );
-                vignetteGrad.addColorStop(0, state.nightMode ? 'rgba(0, 5, 15, 0.1)' : 'rgba(0, 30, 40, 0.05)');
-                vignetteGrad.addColorStop(1, state.nightMode ? 'rgba(0, 5, 15, 0.6)' : 'rgba(0, 30, 40, 0.3)');
-                ctx.fillStyle = vignetteGrad;
-                ctx.fillRect(0,0,state.width, state.height);
-            }
+            // Update & Draw Waves
+            state.waves = state.waves.filter(w => w.age < w.life);
+            state.waves.forEach(w => { w.update(); w.draw(ctx); });
 
             state.animationId = requestAnimationFrame(loop);
         }
@@ -1080,21 +589,19 @@
             // --- INTERACTION TYPE: TOUCH START ---
             if (e.type === 'mousedown' || e.type === 'touchstart') {
                 if (state.feedingMode) {
-                    // FEEDING - limit food to max
-                    if (state.food.length < CONFIG.maxFood) {
-                        state.food.push(new Pellet(x, y));
-                        playSound('plop'); 
-                        // Always create ripples
-                        for(let i=0; i<3; i++) {
-                            const a = (Math.PI*2/3)*i;
-                            state.waves.push(new Wave(x, y, Math.cos(a)*0.4, Math.sin(a)*0.4));
-                        }
+                    // FEEDING
+                    state.food.push(new Pellet(x, y));
+                    playSound('plop'); 
+                    // Create ripples
+                    for(let i=0; i<3; i++) {
+                        const a = (Math.PI*2/3)*i;
+                        state.waves.push(new Wave(x, y, Math.cos(a)*0.4, Math.sin(a)*0.4));
                     }
                 } else {
                     // SCARING/TOUCHING
                     state.input = {x, y, active: true};
                     playSound('splash'); 
-                    // Always create starburst ripples
+                    // Create starburst ripples
                     for(let i=0; i<5; i++) {
                         const a = (Math.PI/2)*i;
                         state.waves.push(new Wave(x, y, Math.cos(a), Math.sin(a)));
@@ -1109,14 +616,12 @@
                     const dist = Math.hypot(dx, dy);
                     state.input.x = x; state.input.y = y;
 
-                    // Only create wake if moving fast enough (skip waves on mobile)
+                    // Only create wake if moving fast enough
                     if (dist > 5) {
-                        if (CONFIG.enableWaves) {
-                            const nx = dx/dist, ny = dy/dist;
-                            // Perpendicular waves (Wake)
-                            state.waves.push(new Wave(x, y, -ny, nx));
-                            state.waves.push(new Wave(x, y, ny, -nx));
-                        }
+                        const nx = dx/dist, ny = dy/dist;
+                        // Perpendicular waves (Wake)
+                        state.waves.push(new Wave(x, y, -ny, nx));
+                        state.waves.push(new Wave(x, y, ny, -nx));
                         
                         // Occasionally play splash sound while dragging
                         if(Math.random()<0.15) playSound('splash');
@@ -1146,7 +651,7 @@
 
         function toggleMode() {
             state.feedingMode = !state.feedingMode;
-            document.getElementById('icon-hand').style.display = state.feedingMode ? 'none' : 'block';
+            document.getElementById('icon-water').style.display = state.feedingMode ? 'none' : 'block';
             document.getElementById('icon-food').style.display = state.feedingMode ? 'block' : 'none';
             document.getElementById('btn-mode').classList.toggle('active', state.feedingMode);
         }
