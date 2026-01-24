@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Wavebox: Koi Chi (Mobile, Wide Food Attraction, Figure-8 Seek)</title>
+    <title>Koi Chi - Mobile, Figure-8, Random Turns, Lillipad Swim Under</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <style>
         body, html {
@@ -23,6 +23,7 @@
             height: 100vh;
             position: absolute;
             left: 0; top: 0;
+            z-index: 1;
         }
         #ui-layer {
             position: absolute;
@@ -69,13 +70,14 @@
             position: absolute;
             left: 12px;
             bottom: 12px;
-            z-index: 6;
+            z-index: 2; /* Lillipad above canvas, below UI */
             pointer-events: none;
         }
         #lillipad svg {
             width: 65px;
             height: 42px;
             opacity: 0.92;
+            pointer-events: none;
         }
         @media (max-width: 600px), (max-height: 700px) {
             #ui-layer {
@@ -124,6 +126,7 @@
     </div>
 </div>
 <div id="lillipad">
+  <!-- Lillipad SVG is below canvas, so fish swim under it -->
   <svg viewBox="0 0 65 42" fill="none">
     <ellipse cx="32.5" cy="21" rx="30" ry="15" fill="#658b45"/>
     <path d="M31 20 Q38 7 54 21 Q44 25 31 20 Z" fill="#8fbb5c"/>
@@ -138,20 +141,24 @@ const CONFIG = {
     fishCount: IS_MOBILE ? 8 : 15,
     baseSpeed: 1.0,
     fleeSpeed: 5.5,
-    foodSpeed: 3.9,                        // Fast enough for nice arcs & figure-8s
+    foodSpeed: 3.9,
     idleSpeedMin: IS_MOBILE ? 0.9 : 1.0,
     idleSpeedMax: IS_MOBILE ? 1.25 : 1.6,
     fleeRadius: IS_MOBILE ? 200 : 350,
-    foodDetectRadius: 700,                 // Detect food from even farther away (was 300)
-    foodSwitchRadius: 120,                 // When close enough, can switch target pellet
-    colors: {
-        day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
-        night: { deep: '#000a12', shallow: '#001a24', caustic: 'rgba(100,150,255,0.04)' }
-    },
+    foodDetectRadius: 700,
+    foodSwitchRadius: 120,
+    randomTurnMin: 3,
+    randomTurnMax: 5,
+    randomAngleMin: 15,
+    randomAngleMax: 60,
     nightStars: IS_MOBILE ? 5 : 8,
     dayBubbles: IS_MOBILE ? 4 : 7,
     dragWaveDist: IS_MOBILE ? 20 : 36,
-    maxTouchWaves: 20
+    maxTouchWaves: 20,
+    colors: {
+        day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
+        night: { deep: '#000a12', shallow: '#001a24', caustic: 'rgba(100,150,255,0.04)' }
+    }
 };
 const state = {
     width: 0, height: 0,
@@ -198,8 +205,6 @@ function setupDayBubbles() {
         state.bubbles.push({x, y, r, phase, speed, origy: y});
     }
 }
-// AUDIO, Pellet, Wave unchanged...
-
 function fadeOutGainAndStop(callback) {
     if (state.gainNode) {
         try {
@@ -312,6 +317,9 @@ class Fish {
         this.speed = CONFIG.baseSpeed + Math.random() * 0.5;
         this.size = 12 + Math.random() * 10;
         this.wiggle = Math.random() * 10;
+        this.nextRandomTurn = performance.now() + 1000 * randomInRange(CONFIG.randomTurnMin, CONFIG.randomTurnMax);
+        this.lastRandomTurn = performance.now();
+        this.randomTurnAngle = 0;
         const r = Math.random();
         if (r < 0.2)      { this.col = '#f0f0f0'; this.spots = '#ff4400'; }
         else if (r < 0.35){ this.col = '#ffaa00'; this.spots = '#ffaa00'; }
@@ -323,9 +331,24 @@ class Fish {
         for(let i=0; i<10; i++) this.trail.push({x:this.x, y:this.y});
     }
     update(ix, iy, dt) {
+        let now = performance.now();
         let targetAngle = this.angle;
         let targetSpeed = CONFIG.baseSpeed;
         let isFleeing = false;
+
+        // Random turn every 3-5 seconds between 15-60 degrees left/right
+        if (now > this.nextRandomTurn) {
+            let angDeg = randomInRange(CONFIG.randomAngleMin, CONFIG.randomAngleMax);
+            if (Math.random() < 0.5) angDeg = -angDeg;
+            this.randomTurnAngle = angDeg * Math.PI / 180;
+            this.nextRandomTurn = now + 1000 * randomInRange(CONFIG.randomTurnMin, CONFIG.randomTurnMax);
+            this.lastRandomTurn = now;
+        }
+        // Apply random turn over 0.3 seconds
+        if ((now - this.lastRandomTurn) < 300 && this.randomTurnAngle !== 0) {
+            targetAngle = this.angle + this.randomTurnAngle;
+        }
+
         if (!state.feedingMode && ix !== null) {
             const dist = Math.hypot(this.x - ix, this.y - iy);
             if (dist < CONFIG.fleeRadius) {
@@ -340,17 +363,14 @@ class Fish {
             let nearestFood = null, nearestDist = 99999;
             state.food.forEach(p => {
                 const d = Math.hypot(p.x - this.x, p.y - this.y);
-                // Detect from far away, so fish will always start seeking
                 if(d < nearestDist &&
-                   d < CONFIG.foodDetectRadius) { // wider than display!
+                   d < CONFIG.foodDetectRadius) {
                     nearestDist = d; nearestFood = p;
                 }
             });
-            // If we're circling and happen to get close to another pellet, “switch” target
             if (nearestFood && nearestDist < CONFIG.foodDetectRadius) {
                 targetAngle = Math.atan2(nearestFood.y - this.y, nearestFood.x - this.x);
                 targetSpeed = CONFIG.foodSpeed;
-                // “Chomp” from a little farther out so circle pattern happens as another pellet appears
                 if (nearestDist < CONFIG.foodSwitchRadius) {
                     state.food = state.food.filter(f => f !== nearestFood);
                     playSound('chomp');
@@ -549,12 +569,9 @@ function loop(now) {
     ctx.fillRect(0,0,state.width, state.height);
     state.waves = state.waves.filter(w => w.age < w.life);
     state.waves.forEach(w => { w.update(dt); w.draw(ctx); });
-    // --- CONTINUOUS RIPPLE WHILE TOUCH/DRAG ---
     if (!state.feedingMode && state.input.active) {
         let tNow = performance.now();
-        // If enough time or distance since last, create new ripple
         if (!state.lastWaveAdded || (tNow - state.lastWaveAdded > 25)) {
-            // Use previous/last drag position or start at center if not available
             const x = state.input.x, y = state.input.y;
             let dx = 0, dy = 1;
             if(state.lastWaveDragX!==null&&state.lastWaveDragY!==null){
@@ -643,7 +660,7 @@ function handleInput(e) {
     }
     else if (e.type === 'mousemove' || e.type === 'touchmove') {
         if (!state.feedingMode && state.input.active) {
-            state.input = {x, y, active: true}; // persist as long as you drag
+            state.input = {x, y, active: true};
             state.persistentTouch = true;
             state.lastWaveDragX = x;
             state.lastWaveDragY = y;
