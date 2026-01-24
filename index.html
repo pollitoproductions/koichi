@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Wavebox: Koi Chi v1.0</title>
+    <title>Wavebox: Koi Chi (Classic Food Seek, Mobile Tweaks)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <style>
         body, html {
@@ -133,17 +133,14 @@
 </div>
 <canvas id="gameCanvas"></canvas>
 <script>
-// --- CONFIG ---
 const IS_MOBILE = window.innerWidth < 600;
 const CONFIG = {
     fishCount: IS_MOBILE ? 8 : 15,
-    baseSpeed: .67,
-    fleeSpeed: 3.35,
-    foodSpeed: 3.35,
+    baseSpeed: 1, // fixed as requested
+    fleeSpeed: 6.7,
+    foodSpeed: 6.7, // used below, but see food block
     idleSpeedMin: IS_MOBILE ? 0.93 : 1.0,
     idleSpeedMax: IS_MOBILE ? 1.49 : 2.14,
-    foodSeekStrength: 0.44, // how strongly they're "gravitationally" attracted to food
-    foodSeekAngular: 0.33,  // angular turn rate toward food
     fleeRadius: IS_MOBILE ? 200 : 350,
     colors: {
         day: { deep: '#002b36', shallow: '#006677', caustic: 'rgba(255,255,255,0.08)' },
@@ -302,14 +299,15 @@ class Pellet {
         ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI*2); ctx.fill();
     }
 }
+// --- Fish with original food-seek (nearest pellet only, classic chaining path!) ---
 class Fish {
     constructor() { this.reset(); }
     reset() {
         this.x = Math.random() * state.width;
         this.y = Math.random() * state.height;
         this.angle = Math.random() * Math.PI * 2;
-        this.speed = CONFIG.baseSpeed + Math.random() * (IS_MOBILE ? 0.34 : 0.5);
-        this.size = (IS_MOBILE ? 14 : 12) + Math.random() * (IS_MOBILE ? 7 : 10); 
+        this.speed = CONFIG.baseSpeed + Math.random() * 0.5;
+        this.size = 12 + Math.random() * 10;
         this.wiggle = Math.random() * 10;
         const r = Math.random();
         if (r < 0.2)      { this.col = '#f0f0f0'; this.spots = '#ff4400'; }
@@ -322,69 +320,40 @@ class Fish {
         for(let i=0; i<10; i++) this.trail.push({x:this.x, y:this.y});
     }
     update(ix, iy, dt) {
-        let targetAngle = this.angle, targetSpeed = this.speed;
-        let isFleeing = false, isSeekingFood = false;
-        let fleeFrom = null;
-        if (!state.feedingMode) {
-            if (state.persistentTouch && state.input.active && ix!==null && iy!==null)
-                fleeFrom = {x:ix, y:iy, time:performance.now()};
-            else if (state.lastTouch.x !== null && performance.now() - state.lastTouch.time < 1100)
-                fleeFrom = state.lastTouch;
-        }
-        if (fleeFrom) {
-            const dist = Math.hypot(this.x - fleeFrom.x, this.y - fleeFrom.y);
-            if (dist < CONFIG.fleeRadius) {
-                isFleeing = true;
-                let jitter = (Math.random()-0.5) * 0.4;
-                targetAngle = Math.atan2(this.y - fleeFrom.y, this.x - fleeFrom.x) + jitter;
-                targetSpeed = CONFIG.fleeSpeed + 0.5*Math.sin(performance.now()/240 + this.x/77);
-            }
-        }
-        else if (!state.feedingMode && ix !== null) {
+        let targetAngle = this.angle;
+        let targetSpeed = CONFIG.baseSpeed;
+        let isFleeing = false;
+        if (!state.feedingMode && ix !== null) {
             const dist = Math.hypot(this.x - ix, this.y - iy);
             if (dist < CONFIG.fleeRadius) {
                 isFleeing = true;
-                let jitter = (Math.random()-0.5) * 0.4;
-                targetAngle = Math.atan2(this.y - iy, this.x - ix) + jitter;
-                targetSpeed = CONFIG.fleeSpeed + 0.5*Math.sin(performance.now()/260 + this.y/61);
+                targetAngle = Math.atan2(this.y - iy, this.x - ix);
+                targetSpeed = CONFIG.fleeSpeed;
+                targetAngle += (Math.random()-0.5) * 0.8;
             }
         }
         if (!isFleeing && state.food.length > 0) {
-            let gravX = 0, gravY = 0, nearestFood = null, nearestDist = 9999;
+            let nearestFood = null, nearestDist = 9999;
             state.food.forEach(p => {
                 const d = Math.hypot(p.x - this.x, p.y - this.y);
-                let strength = 30000 / ((d*d) + 2000);
-                gravX += (p.x - this.x) * strength;
-                gravY += (p.y - this.y) * strength;
                 if(d < nearestDist) { nearestDist = d; nearestFood = p; }
             });
-            const attractAngle = Math.atan2(gravY, gravX);
-            let adiff = attractAngle - this.angle;
-            while (adiff < -Math.PI) adiff += Math.PI * 2;
-            while (adiff > Math.PI) adiff -= Math.PI * 2;
-            targetAngle = this.angle + adiff * CONFIG.foodSeekAngular * dt;
-            targetSpeed = CONFIG.foodSpeed + Math.min(Math.abs(adiff), 0.7) * CONFIG.foodSeekStrength * 11;
-            isSeekingFood = true;
-            if (nearestFood && nearestDist < 12 + this.size*0.5) {
-                state.food = state.food.filter(f => f !== nearestFood);
-                playSound('chomp');
-                this.wiggle += 10;
+            if (nearestFood && nearestDist < 300) {
+                targetAngle = Math.atan2(nearestFood.y - this.y, nearestFood.x - this.x);
+                targetSpeed = CONFIG.foodSpeed; // 6.7 as you asked
+                if (nearestDist < 10) {
+                    state.food = state.food.filter(f => f !== nearestFood);
+                    playSound('chomp');
+                    this.wiggle += 10;
+                }
             }
-        }
-        if (!isFleeing && !isSeekingFood) {
-            if (!this.wanderSeed) this.wanderSeed = Math.random() * 1000;
-            let wanderSpeed = 1.5 + Math.sin((performance.now() * 0.00012) + this.wanderSeed) * 0.5;
-            targetSpeed = Math.max(CONFIG.idleSpeedMin, Math.min(CONFIG.idleSpeedMax, wanderSpeed));
         }
         let diff = targetAngle - this.angle;
         while (diff < -Math.PI) diff += Math.PI * 2;
         while (diff > Math.PI) diff -= Math.PI * 2;
-        const turnRate = (isFleeing && state.persistentTouch) ? 0.21 : (isFleeing ? 0.12 : (isSeekingFood ? CONFIG.foodSeekAngular : 0.05));
+        const turnRate = isFleeing ? 0.15 : 0.05;
         this.angle += diff * turnRate * dt;
-        this.speed += (targetSpeed - this.speed) * ((isFleeing && state.persistentTouch) ? 0.12 : ((isSeekingFood) ? (CONFIG.foodSeekStrength) : 0.05)) * dt;
-        if (isFleeing)               this.speed = Math.min(this.speed, CONFIG.fleeSpeed + 0.9);
-        else if (isSeekingFood)      this.speed = Math.min(this.speed, CONFIG.foodSpeed + 2.2);
-        else                         this.speed = Math.max(CONFIG.idleSpeedMin, Math.min(this.speed, CONFIG.idleSpeedMax));
+        this.speed += (targetSpeed - this.speed) * 0.05 * dt;
         this.x += Math.cos(this.angle) * this.speed * dt;
         this.y += Math.sin(this.angle) * this.speed * dt;
         const pad = 60;
@@ -452,11 +421,7 @@ class Wave {
         this.baseSpread = opts.spread !== undefined ? opts.spread : 24;
         this.colorAlpha = opts.colorAlpha !== undefined ? opts.colorAlpha : 1.0;
     }
-    update(dt) {
-        this.x += this.dx * 3.5 * dt;
-        this.y += this.dy * 3.5 * dt;
-        this.age += dt;
-    }
+    update(dt) { this.x += this.dx * 3.5 * dt; this.y += this.dy * 3.5 * dt; this.age += dt; }
     draw(ctx) {
         const prog = this.age / this.life;
         if (prog >= 1) return;
@@ -649,7 +614,7 @@ function handleInput(e) {
     }
     else if (e.type === 'mousemove' || e.type === 'touchmove') {
         if (!state.feedingMode && state.input.active) {
-            state.input = {x, y, active: true};
+            state.input = {x, y, active: true}; // persist as long as you drag
             state.persistentTouch = true;
             const prevX = state.lastWaveDragX, prevY = state.lastWaveDragY;
             const dx = x - (prevX ?? x), dy = y - (prevY ?? y);
