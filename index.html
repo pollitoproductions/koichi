@@ -126,7 +126,7 @@
             enableStars: true,               // Enable stars on all devices
             enableShadows: !isMobile,        // NEW: Disable shadows on mobile
             enableScales: !isMobile,         // NEW: Disable scale details on mobile
-            enableWaves: !isMobile,          // NEW: Disable wave effects on mobile
+            enableWaves: true,               // Always enable wave effects, even on mobile
             enableFishTexture: true,         // NEW: Enable simple texture on fish
             simplifyPhysics: isMobile,       // NEW: Simplify physics calculations on mobile
             colors: {
@@ -561,10 +561,45 @@
                     ctx.restore();
                 }
 
-                // Draw Fish
-                ctx.save();
-                this.drawBody(ctx, false, angle);
-                ctx.restore();
+                // Improved mobile fish rendering: more tapered, fish-like body
+                if (isMobile) {
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.rotate(angle);
+                    ctx.globalAlpha = 0.85;
+                    ctx.beginPath();
+                    // Head
+                    ctx.moveTo(0, 0);
+                    // Body curve (tapered)
+                    ctx.bezierCurveTo(
+                        this.size * 0.5, -this.size * 0.4,
+                        this.size * 1.2, -this.size * 0.2,
+                        this.size * 1.6, 0
+                    );
+                    ctx.bezierCurveTo(
+                        this.size * 1.2, this.size * 0.2,
+                        this.size * 0.5, this.size * 0.4,
+                        0, 0
+                    );
+                    ctx.fillStyle = this.col;
+                    ctx.shadowColor = '#0008';
+                    ctx.shadowBlur = 8;
+                    ctx.fill();
+                    // Tail fin
+                    ctx.beginPath();
+                    ctx.moveTo(this.size * 1.6, 0);
+                    ctx.lineTo(this.size * 1.9, -this.size * 0.25);
+                    ctx.lineTo(this.size * 1.9, this.size * 0.25);
+                    ctx.closePath();
+                    ctx.fillStyle = '#fff8';
+                    ctx.globalAlpha = 0.6;
+                    ctx.fill();
+                    ctx.restore();
+                } else {
+                    ctx.save();
+                    this.drawBody(ctx, false, angle);
+                    ctx.restore();
+                }
             }
 
             drawBody(ctx, isShadow, angle) {
