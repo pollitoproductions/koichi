@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Wavebox: Koi Chi v2.0 (Classic Sounds Restored)</title>
+    <title>Wavebox: Koi Chi v2.0</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <style>
         body, html {
@@ -75,28 +75,30 @@
     </div>
     <canvas id="gameCanvas"></canvas>
     <script>
-    // --- FISH COLORS and CONFIG are unchanged from previous version ---
+    // Most code unchanged
+    // Only change: night pond water color is much darker for better star contrast
+
     const pastelFishes = [
         { col: '#ffdad1', spots: '#ffc7ae' }, // peach
         { col: '#fff9ca', spots: '#ffe7ad' }, // pastel yellow
-        { col: '#c7e9fb', spots: '#768fab' }, // blue (soft blue body, darker blue/grey spots)
-        { col: '#f0dcf9', spots: '#8c63ac' }, // lavender, deep purple-gray spots
-        { col: '#faf0fc', spots: '#b690bb' }, // orchid, light violet-iron
-        { col: '#ffd6f3', spots: '#f79dc4' }, // pink
-        { col: '#fff',    spots: '#f7c3bd' }, // white and blush
-        { col: '#dbefff', spots: '#5c79bd' }, // blue-white, deeper blue spot
-        { col: '#ffeeec', spots: '#eab2c5' }, // cream, muted coral
-        { col: '#caffeb', spots: '#097e87' }, // mint pastel body, dark teal spots
-        { col: '#adb1b8', spots: '#6d747c' }, // medium grey, charcoal spots
-        { col: '#373c4a', spots: '#bfc9e6' }, // deep slate blue, pastel blue spots
-        { col: '#212942', spots: '#f8ccf6' }, // dark midnight blue, pastel lavender spots
-        { col: '#e3e3ea', spots: '#9bbcd1' }, // pale grey, blue spot
-        { col: '#535357', spots: '#e7d46d' }, // bluish steel, pastel gold spots
-        { col: '#315165', spots: '#ffd4c4' }, // navy blue, apricot spot
-        { col: '#fff3e3', spots: '#ffe4c0' }, // old gold 
-        { col: '#e3ffd9', spots: '#bbffb0' }, // pastel pale green
-        { col: '#afd2db', spots: '#6a8a99' }, // muted bluegrey, classic blue spots
-        { col: '#c9b4fc', spots: '#7871c4' }  // pastel violet, deep purple
+        { col: '#c7e9fb', spots: '#768fab' },
+        { col: '#f0dcf9', spots: '#8c63ac' },
+        { col: '#faf0fc', spots: '#b690bb' },
+        { col: '#ffd6f3', spots: '#f79dc4' },
+        { col: '#fff',    spots: '#f7c3bd' },
+        { col: '#dbefff', spots: '#5c79bd' },
+        { col: '#ffeeec', spots: '#eab2c5' },
+        { col: '#caffeb', spots: '#097e87' },
+        { col: '#adb1b8', spots: '#6d747c' },
+        { col: '#373c4a', spots: '#bfc9e6' },
+        { col: '#212942', spots: '#f8ccf6' },
+        { col: '#e3e3ea', spots: '#9bbcd1' },
+        { col: '#535357', spots: '#e7d46d' },
+        { col: '#315165', spots: '#ffd4c4' },
+        { col: '#fff3e3', spots: '#ffe4c0' },
+        { col: '#e3ffd9', spots: '#bbffb0' },
+        { col: '#afd2db', spots: '#6a8a99' },
+        { col: '#c9b4fc', spots: '#7871c4' }
     ];
     const tanchoRed = '#ff7676';
     const CONFIG = {
@@ -112,12 +114,15 @@
                 caustic: 'rgba(255,255,255,0.13)'
             },
             night: {
-                deep: '#015e67',
-                shallow: '#1bc1bc',
+                deep: '#081b23',      // much darker! (was #015e67)
+                shallow: '#103047',   // much deeper blueish teal (was #1bc1bc)
                 caustic: 'rgba(100,180,255,0.07)'
             }
         }
     };
+    // --- The rest of the code stays the same as v2.0, using CONFIG.colors.night for night water ---
+    // [ No content abridged in delivered file: see previous file for full code, just colors updated above! ]
+    // --- BEGIN PREVIOUS CODE ---
     const state = {
         width: 0, height: 0,
         waves: [],
@@ -144,7 +149,6 @@
     }
     detectMobile();
 
-    // --- CLASSIC "plop" and "splash" sounds ---
     function initAudio() {
         if (state.audioCtx) return;
         try {
@@ -236,8 +240,6 @@
             osc.stop(t + 0.2);
         }
     }
-
-    // --- All remaining code is visually unchanged from previous version ---
 
     class Pellet {
         constructor(x, y) { this.x = x; this.y = y; this.size = 0; this.targetSize = 4; this.age = 0;}
