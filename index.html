@@ -94,7 +94,7 @@
         baseSpeed: 1.0,
         fleeSpeed: 9.0,
         fleeRadius: 350,
-        maxWaves: 50,
+        maxWaves: 25, // reduced from 50 to limit rippling CPU/GPU load
         colors: {
             day: {
                 deep: '#05828C',            // darker teal, for water
@@ -228,17 +228,10 @@
         }
     }
 
-    // Pellet now updates with true seconds and growth scaled to 30 fps baseline feel
+    // Pellet: restore original (frame-style) growth behavior per your request.
     class Pellet {
-        constructor(x, y) { this.x = x; this.y = y; this.size = 0; this.targetSize = 4; this.age = 0; }
-        update(delta) { 
-            // delta in seconds
-            this.age += delta;
-            // original growth was ~0.5 per frame at 60fps -> 30 per second.
-            // now baseline is 30fps, so per-second growth should reflect original per-frame behavior: 0.5 * 30 = 15 /s
-            const growthPerSecond = 15;
-            if (this.size < this.targetSize) this.size = Math.min(this.targetSize, this.size + growthPerSecond * delta);
-        }
+        constructor(x, y) { this.x = x; this.y = y; this.size = 0; this.targetSize = 4; this.age = 0;}
+        update() { this.age++; if(this.size < this.targetSize) this.size += 0.5;}
     }
 
     function drawFishTexture(ctx, x, y, size, typeSeed, col) {
@@ -279,6 +272,7 @@
             this.angle = Math.random() * Math.PI * 2;
             this.speed = CONFIG.baseSpeed + Math.random() * 0.5;
             this.size = state.isMobile ? 18 + Math.random() * 10 : 12 + Math.random() * 10;
+            this.baseSize = this.size; // store baseSize for optional growth / constraints
             this.wiggle = Math.random() * 10;
             this.typeSeed = Math.floor(Math.random()*100);
             if (Math.random()<0.13) {
@@ -330,12 +324,15 @@
             return { amount: mode*deg * Math.PI/180, duration: swerveDuration };
         }
         update(ix, iy, delta=1/60) {
-            // switch baseline scaling factor from 60->30 to better suit 30fps device behavior
-            let speedMul = delta * 30;
+            // Use a 30fps baseline factor to reduce apparent "speed" on low-FPS devices
+            const speedMul = delta * 30;
+
             let targetAngle = this.angle;
             let targetSpeed = CONFIG.baseSpeed;
             let isFleeing = false;
             let doWander = (!state.feedingMode && ix == null && iy == null) || (state.feedingMode && state.food.length==0);
+
+            // Idle turning and back-forth (figure-8 coaxing preserved)
             if (doWander) {
                 this.idleMoveTimer += delta;
                 if (
@@ -343,7 +340,7 @@
                     (this.backForthMode && this.idleTurnState?.time >= this.idleTurnState?.duration)
                 ) {
                     let swv;
-                    if (this.backForthMode && this.bfStep < this.bfSeq.length-1 && this.idleTurnState && this.idleTurnState.time >= this.idleTurnState.duration) {
+                    if (this.backForthMode && this.bfStep < (this.bfSeq ? this.bfSeq.length - 1 : -1) && this.idleTurnState && this.idleTurnState.time >= this.idleTurnState.duration) {
                         this.bfStep++;
                         swv = this.bfSeq[this.bfStep];
                     } else {
@@ -356,14 +353,14 @@
                         duration: swv.duration,
                         angleRate: swv.amount / swv.duration
                     };
-                    if (!this.backForthMode || (this.bfStep===this.bfSeq.length-1)) {
+                    if (!this.backForthMode || (this.bfStep=== (this.bfSeq ? this.bfSeq.length - 1 : 0))) {
                         this.idleMoveTimer = 0;
                         this.idleMoveInterval = this.randomInterval();
                         this.backForthMode = false;
                     }
                 }
                 if (this.idleTurnState && this.idleTurnState.time < this.idleTurnState.duration) {
-                    let dt = Math.min(delta, this.idleTurnState.duration-this.idleTurnState.time);
+                    let dt = Math.min(delta, this.idleTurnState.duration - this.idleTurnState.time);
                     targetAngle += this.idleTurnState.angleRate * dt;
                     this.idleTurnState.time += dt;
                 }
@@ -372,6 +369,8 @@
                 this.idleTurnState = undefined;
                 this.backForthMode = false;
             }
+
+            // Flee logic (from user input) - unchanged semantics
             if (!state.feedingMode && ix !== null) {
                 const dx = this.x - ix;
                 const dy = this.y - iy;
@@ -384,6 +383,8 @@
                     targetAngle += (Math.random()-0.5) * 0.8;
                 }
             }
+
+            // Food-seeking (unchanged)
             if (!isFleeing && state.food.length > 0) {
                 let nearestFood = null;
                 let nearestDistSq = 99999999;
@@ -408,10 +409,13 @@
                             state.food.splice(index, 1);
                             playSound('chomp');
                             this.wiggle += 10;
+                            // Optional: small, natural growth could go here; omitted per your earlier preference.
                         }
                     }
                 }
             }
+
+            // Apply steering
             let diff = targetAngle - this.angle;
             while (diff < -Math.PI) diff += Math.PI * 2;
             while (diff > Math.PI) diff -= Math.PI * 2;
@@ -419,15 +423,18 @@
             this.angle += diff * turnRate * speedMul;
             this.speed += (targetSpeed - this.speed) * 0.05 * speedMul;
 
+            // Position update (scaled)
             this.x += Math.cos(this.angle) * this.speed * speedMul;
             this.y += Math.sin(this.angle) * this.speed * speedMul;
 
+            // Wrap
             const pad = 60;
             if(this.x < -pad) this.x = state.width + pad;
             if(this.x > state.width + pad) this.x = -pad;
             if(this.y < -pad) this.y = state.height + pad;
             if(this.y > state.height + pad) this.y = -pad;
 
+            // Trail smoothing
             this.trail[0] = {x: this.x, y: this.y};
             for(let i=1; i<this.trail.length; i++) {
                 const prev = this.trail[i-1];
@@ -437,16 +444,19 @@
                 curr.x = prev.x - Math.cos(ang) * segLen;
                 curr.y = prev.y - Math.sin(ang) * segLen;
             }
+
             this.wiggle += (0.22 + (this.speed * 0.13)) * speedMul;
         }
         draw(ctx) {
             const head = this.trail[0];
             const body = this.trail[4];
             const angle = Math.atan2(head.y - body.y, head.x - body.x);
+            // Shadow offset scaled with fish size to prevent "rotating over tail" artifacts for big fish
+            const shadowOffset = Math.max(6, Math.min(28, Math.floor(this.size * 0.6)));
             ctx.save();
-            ctx.translate(15, 15);
+            ctx.translate(shadowOffset, shadowOffset);
             this.drawBody(ctx, true, angle);
-            ctx.translate(-15, -15);
+            ctx.translate(-shadowOffset, -shadowOffset);
             this.drawBody(ctx, false, angle);
             ctx.restore();
         }
@@ -521,14 +531,18 @@
         }
     }
 
-    // --- rest as before, including wave, stars, main loop, etc ---
-
+    // --- Wave class: tuned to reduce heavy rippling and CPU load ---
     class Wave {
-        constructor(x, y, dx, dy) { this.x = x; this.y = y; this.dx = dx; this.dy = dy; this.age = 0; this.life = 2.0; }
+        constructor(x, y, dx, dy) { 
+            this.x = x; this.y = y; this.dx = dx; this.dy = dy; 
+            this.age = 0; 
+            this.life = 1.2; // shorter life to reduce on-screen wave count and cost
+        }
         update(delta=1/60) {
             // movement scaled to 30fps baseline feel
-            this.x += this.dx * 3.5 * delta * 30;
-            this.y += this.dy * 3.5 * delta * 30;
+            const moveScale = 3.2 * 30; // slightly reduced from 3.5 to ease movement load
+            this.x += this.dx * moveScale * delta;
+            this.y += this.dy * moveScale * delta;
             this.age += delta;
         }
         draw(ctx) {
@@ -536,41 +550,41 @@
             if (prog >= 1) return;
 
             const alpha = 1 - prog;
-            // spread scaled for 30fps baseline: 2.2 * 30 = 66
-            const spread = 20 + (this.age * 66);
-
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, spread, 0, Math.PI * 2);
-            ctx.lineWidth = 2 + 3 * alpha;
-            ctx.strokeStyle = CONFIG.currentCircle;
-            ctx.globalAlpha = 0.26 * alpha + 0.22 * Math.pow(alpha, 3);
-            ctx.shadowColor = CONFIG.currentCircle;
-            ctx.shadowBlur = 10 * alpha;
-            ctx.stroke();
-            ctx.restore();
-
-            const px = -this.dy * spread; 
-            const py =  this.dx * spread;
-            const bright = state.nightMode ? '130, 210, 255' : '190, 255, 252';
-            const dark = state.nightMode ? '2,22,25' : '6,32,38';
+            // spread growth reduced to lower cost and visual intensity
+            const spread = 20 + (this.age * 48); // lowered from larger numbers
 
             ctx.lineCap = 'round';
+
+            // subtle outer dark stroke
             ctx.beginPath();
-            ctx.moveTo(this.x - px - 3, this.y - py + 3);
-            ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x + px - 3, this.y + py + 3);
-            ctx.lineWidth = 10 * alpha;
-            ctx.strokeStyle = `rgba(${dark}, ${alpha * 0.32})`;
+            ctx.moveTo(this.x - ( -this.dy * spread ) - 3, this.y - ( this.dx * spread ) + 3);
+            ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x + ( -this.dy * spread ) - 3, this.y + ( this.dx * spread ) + 3);
+            ctx.lineWidth = 8 * alpha;
+            ctx.strokeStyle = `rgba(${state.nightMode ? '2,22,25' : '6,32,38'}, ${alpha * 0.28})`;
             ctx.stroke();
 
+            // bright inner stroke
             ctx.beginPath();
-            ctx.moveTo(this.x - px, this.y - py);
-            ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x + px, this.y + py);
-            ctx.lineWidth = 5 * alpha;
-            ctx.strokeStyle = `rgba(${bright}, ${alpha * 0.69})`;
-            ctx.stroke(); 
+            ctx.moveTo(this.x + ( -this.dy * spread ), this.y + ( this.dx * spread ));
+            ctx.quadraticCurveTo(this.x + this.dx*spread, this.y + this.dy*spread, this.x - ( -this.dy * spread ), this.y - ( this.dx * spread ));
+            ctx.lineWidth = 4 * alpha;
+            ctx.strokeStyle = `rgba(${state.nightMode ? '130, 210, 255' : '190, 255, 252'}, ${alpha * 0.65})`;
+            ctx.stroke();
+
+            // rotating current circle (less blur to reduce GPU cost)
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, spread*0.6, 0, Math.PI * 2);
+            ctx.lineWidth = 1 + 2 * alpha;
+            ctx.strokeStyle = CONFIG.currentCircle;
+            ctx.globalAlpha = 0.18 * alpha + 0.18 * Math.pow(alpha, 2);
+            ctx.shadowColor = CONFIG.currentCircle;
+            ctx.shadowBlur = 6 * alpha; // reduced blur
+            ctx.stroke();
+            ctx.restore();
         }
     }
+
     let stars = [];
     function generateStars() {
         let count = Math.floor(Math.max(45, (state.width * state.height)/13000));
@@ -638,20 +652,23 @@
     function loop(now) {
         if (!state.running) return;
         now = now || performance.now();
+        // delta in seconds, cap to 0.05s (50ms)
         let delta = Math.min(0.05, (now - state.lastFrame) / 1000);
         state.lastFrame = now;
         state.simTime += delta;
         drawWater(state.simTime * 1000);
 
+        // Update and draw food (pellets) using original fixed growth behavior
         if (state.food.length > 0) {
             ctx.fillStyle = '#8B4513';
             ctx.beginPath();
             state.food.forEach(f => {
-                f.update(delta);
+                f.update(); // original, frame-count style update per your request
                 ctx.rect(f.x - f.size/2, f.y - f.size/2, f.size, f.size);
             });
             ctx.fill();
         }
+
         const ix = state.input.active ? state.input.x : null;
         const iy = state.input.active ? state.input.y : null;
         state.fish.forEach(f => { f.update(ix, iy, delta); f.draw(ctx); });
@@ -667,6 +684,7 @@
 
         state.animationId = requestAnimationFrame(loop);
     }
+
     function handleInput(e) {
         e.preventDefault();
         if (state.audioEnabled && state.audioCtx && state.audioCtx.state === 'suspended') state.audioCtx.resume();
@@ -679,6 +697,7 @@
             if (state.feedingMode) {
                 state.food.push(new Pellet(x, y));
                 playSound('plop'); 
+                // fewer ripples on spawn to reduce load:
                 for(let i=0; i<3; i++) {
                     const a = (Math.PI*2/3)*i;
                     state.waves.push(new Wave(x, y, Math.cos(a)*0.4, Math.sin(a)*0.4));
@@ -686,8 +705,9 @@
             } else {
                 state.input = {x, y, active: true};
                 playSound('splash');
-                for(let i=0; i<5; i++) {
-                    const a = (Math.PI/2)*i;
+                // reduce number of waves on direct non-feeding splashes to ease GPU
+                for(let i=0; i<3; i++) {
+                    const a = (Math.PI*2/3)*i;
                     state.waves.push(new Wave(x, y, Math.cos(a), Math.sin(a)));
                 }
             }
@@ -698,7 +718,8 @@
                 const dy = y - state.input.y;
                 const dist = Math.hypot(dx, dy);
                 state.input.x = x; state.input.y = y;
-                if (dist > 5) {
+                // throttle wave creation during drag: require larger movement to spawn
+                if (dist > 12) {
                     const nx = dx/dist, ny = dy/dist;
                     state.waves.push(new Wave(x, y, -ny, nx));
                     state.waves.push(new Wave(x, y, ny, -nx));
