@@ -135,7 +135,7 @@
     }
     detectMobile();
 
-    // AUDIO (same as before)
+    // ----- AUDIO (unchanged) -----
     function initAudio() {
         if (state.audioCtx) return;
         try {
@@ -303,11 +303,11 @@
                 if (Math.random() < 0.5) this.lastTurnDir *= -1;
                 mode = this.lastTurnDir;
             }
-            let deg = 8 + Math.random()*85;
-            let swerveDuration = 0.6 + Math.random()*0.8;
+            let deg = 8 + Math.random()*85; // 8-93deg
+            let swerveDuration = 0.6 + Math.random()*0.8; // 0.6-1.4s
             if (this.backForthMode) {
                 this.bfSeq = [];
-                let bfct = 2 + Math.floor(Math.random()*2);
+                let bfct = 2 + Math.floor(Math.random()*2); // 2 or 3
                 let bfmag = 17 + Math.random()*37;
                 for(let k=0; k<bfct; ++k) {
                     this.bfSeq.push({
@@ -321,8 +321,7 @@
             return { amount: mode*deg * Math.PI/180, duration: swerveDuration };
         }
         update(ix, iy, delta=1/60) {
-            // delta in SECONDS! All motion/animation scaled by delta.
-
+            let speedMul = delta * 60;
             let targetAngle = this.angle;
             let targetSpeed = CONFIG.baseSpeed;
             let isFleeing = false;
@@ -407,13 +406,11 @@
             while (diff < -Math.PI) diff += Math.PI * 2;
             while (diff > Math.PI) diff -= Math.PI * 2;
             const turnRate = isFleeing ? 0.15 : 0.05;
-            this.angle += diff * turnRate * delta;
+            this.angle += diff * turnRate * speedMul;
+            this.speed += (targetSpeed - this.speed) * 0.05 * speedMul;
 
-            this.speed += (targetSpeed - this.speed) * 0.05 * delta;
-
-            // Here: delta is seconds, so multiply by delta for distance updates. Use 60 as a scaling factor to keep feel.
-            this.x += Math.cos(this.angle) * this.speed * delta * 60;
-            this.y += Math.sin(this.angle) * this.speed * delta * 60;
+            this.x += Math.cos(this.angle) * this.speed * speedMul;
+            this.y += Math.sin(this.angle) * this.speed * speedMul;
 
             const pad = 60;
             if(this.x < -pad) this.x = state.width + pad;
@@ -430,7 +427,7 @@
                 curr.x = prev.x - Math.cos(ang) * segLen;
                 curr.y = prev.y - Math.sin(ang) * segLen;
             }
-            this.wiggle += (0.22 + (this.speed * 0.13)) * delta * 60;
+            this.wiggle += (0.22 + (this.speed * 0.13)) * speedMul;
         }
         draw(ctx) {
             const head = this.trail[0];
@@ -517,17 +514,19 @@
     // --- rest as before, including wave, stars, main loop, etc ---
 
     class Wave {
-        constructor(x, y, dx, dy) { this.x = x; this.y = y; this.dx = dx; this.dy = dy; this.age = 0; this.life = 2.0; }
+        constructor(x, y, dx, dy) { this.x = x; this.y = y; this.dx = dx; this.dy = dy; this.age = 0; this.life = 100; }
         update(delta=1/60) {
             this.x += this.dx * 3.5 * delta * 60;
             this.y += this.dy * 3.5 * delta * 60;
-            this.age += delta;
+            this.age += delta * 60;
         }
         draw(ctx) {
             const prog = this.age / this.life;
             if (prog >= 1) return;
+
             const alpha = 1 - prog;
-            const spread = 20 + (this.age * 2.2 * 60); // *60 for old behavior scaling
+            const spread = 20 + (this.age * 2.2);
+
             ctx.save();
             ctx.beginPath();
             ctx.arc(this.x, this.y, spread, 0, Math.PI * 2);
@@ -627,7 +626,7 @@
     function loop(now) {
         if (!state.running) return;
         now = now || performance.now();
-        let delta = Math.min(0.05, (now - state.lastFrame) / 1000); // cap at 50ms (framerate spike guard)
+        let delta = Math.min(50, now - state.lastFrame) / 1000;
         state.lastFrame = now;
         state.simTime += delta;
         drawWater(state.simTime * 1000);
@@ -767,6 +766,8 @@
     document.getElementById('btn-night').addEventListener('click', (e) => { e.stopPropagation(); toggleNight(); });
     window.addEventListener("beforeunload", () => { cleanupAudio(); });
     init();
+
+    // ... rest same ...
     </script>
 </body>
 </html>
