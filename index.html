@@ -73,21 +73,21 @@
     <canvas id="gameCanvas"></canvas>
     <script>
     // ----- KOI PALETTES -----
-    // Only the five requested, accents as needed:
-    // 1. White + Orange + Black (classic Kohaku or Sanke/Showa)
-    // 2. White + Red (clean and iconic)
-    // 3. Cream + Gold (luxury koi)
-    // 4. Charcoal + Silver (night/mystic)
-    // 5. White + Blush Pink (soft/zen)
+    // Kept the five signature pairings and added blue/green + gold accents for darks
     const koiPalettes = [
-        { col: '#fff',      spots: '#FF8000', accent: '#232323' },      // White + Orange + Black
-        { col: '#fff',      spots: '#d72624' },                        // White + Red
-        { col: '#fffbea',   spots: '#FFD700' },                        // Cream + Gold
-        { col: '#23242A',   spots: '#c0c0c0' },                        // Charcoal + Silver
-        { col: '#fff',      spots: '#FFB2C7' }                         // White + Blush Pink
+        { col: '#fff',      spots: '#FF8000', accent: '#000'    }, // White + Orange + Black (classic Kohaku vibe)
+        { col: '#fff',      spots: '#d72624' },                  // White + Red (clean, iconic)
+        { col: '#fffbea',   spots: '#FFD700' },                  // Cream + Gold (luxury koi)
+        { col: '#1f2226',   spots: '#c0c0c0', accent: '#FFD700' },// Charcoal + Silver, with gold accents
+        { col: '#fff',      spots: '#FFB2C7' },                  // White + Blush Pink (soft/zen)
+
+        // added blue/green variations and richer accents
+        { col: '#186F74',   spots: '#E6FBFF', accent: '#92DCC6' }, // Blue-green base with pale highlights
+        { col: '#2BA3A9',   spots: '#DFFAF6', accent: '#fffbea' }, // Teal / aquamarine style
+        { col: '#0e4f55',   spots: '#FFD880', accent: '#FFD700' }  // Dark teal with golden highlights (rare)
     ];
     const tanchoRed = '#ff7676';
-    const pastelFishes = koiPalettes; // for code compatibility
+    const pastelFishes = koiPalettes; // compatibility
 
     const CONFIG = {
         fishCount: 20,
@@ -228,10 +228,17 @@
         }
     }
 
+    // Pellet now updates with true seconds
     class Pellet {
-        constructor(x, y) { this.x = x; this.y = y; this.size = 0; this.targetSize = 4; this.age = 0;}
-        update() { this.age++; if(this.size < this.targetSize) this.size += 0.5;}
+        constructor(x, y) { this.x = x; this.y = y; this.size = 0; this.targetSize = 4; this.age = 0; }
+        update(delta) { 
+            // delta in seconds
+            this.age += delta;
+            const growthPerSecond = 30; // original behavior ~0.5 per frame at 60fps => 30/s
+            if (this.size < this.targetSize) this.size = Math.min(this.targetSize, this.size + growthPerSecond * delta);
+        }
     }
+
     function drawFishTexture(ctx, x, y, size, typeSeed, col) {
         const bodyGradient = ctx.createRadialGradient(x, y, size*0.25, x, y, size*1.08);
         bodyGradient.addColorStop(0, 'rgba(250,250,255,0.65)');
@@ -261,7 +268,7 @@
         ctx.restore();
     }
 
-    // --- Fish class ---
+    // --- FISH class ---
     class Fish {
         constructor() { this.reset(); }
         reset() {
@@ -320,12 +327,15 @@
             }
             return { amount: mode*deg * Math.PI/180, duration: swerveDuration };
         }
-        update(ix, iy, delta=1/60) {
-            let speedMul = delta * 60;
+        update(ix, iy, delta=0.0166667) { // delta in seconds
+            // Keep timer-based behavior in seconds
+            const speedMul = delta * 60; // preserve original motion feel by scaling (60 frames per second baseline)
+
             let targetAngle = this.angle;
             let targetSpeed = CONFIG.baseSpeed;
             let isFleeing = false;
             let doWander = (!state.feedingMode && ix == null && iy == null) || (state.feedingMode && state.food.length==0);
+
             if (doWander) {
                 this.idleMoveTimer += delta;
                 if (
@@ -333,7 +343,7 @@
                     (this.backForthMode && this.idleTurnState?.time >= this.idleTurnState?.duration)
                 ) {
                     let swv;
-                    if (this.backForthMode && this.bfStep < this.bfSeq.length-1 && this.idleTurnState && this.idleTurnState.time >= this.idleTurnState.duration) {
+                    if (this.backForthMode && this.bfStep < (this.bfSeq ? this.bfSeq.length - 1 : -1) && this.idleTurnState && this.idleTurnState.time >= this.idleTurnState.duration) {
                         this.bfStep++;
                         swv = this.bfSeq[this.bfStep];
                     } else {
@@ -346,14 +356,14 @@
                         duration: swv.duration,
                         angleRate: swv.amount / swv.duration
                     };
-                    if (!this.backForthMode || (this.bfStep===this.bfSeq.length-1)) {
+                    if (!this.backForthMode || (this.bfStep=== (this.bfSeq ? this.bfSeq.length - 1 : 0))) {
                         this.idleMoveTimer = 0;
                         this.idleMoveInterval = this.randomInterval();
                         this.backForthMode = false;
                     }
                 }
                 if (this.idleTurnState && this.idleTurnState.time < this.idleTurnState.duration) {
-                    let dt = Math.min(delta, this.idleTurnState.duration-this.idleTurnState.time);
+                    let dt = Math.min(delta, this.idleTurnState.duration - this.idleTurnState.time);
                     targetAngle += this.idleTurnState.angleRate * dt;
                     this.idleTurnState.time += dt;
                 }
@@ -362,6 +372,8 @@
                 this.idleTurnState = undefined;
                 this.backForthMode = false;
             }
+
+            // Flee from input when not feeding
             if (!state.feedingMode && ix !== null) {
                 const dx = this.x - ix;
                 const dy = this.y - iy;
@@ -374,9 +386,11 @@
                     targetAngle += (Math.random()-0.5) * 0.8;
                 }
             }
+
+            // Seek food if present
             if (!isFleeing && state.food.length > 0) {
                 let nearestFood = null;
-                let nearestDistSq = 99999999;
+                let nearestDistSq = Infinity;
                 const searchBox = 300;
                 for(let i=0; i<state.food.length; i++){
                     const f = state.food[i];
@@ -402,13 +416,16 @@
                     }
                 }
             }
+
             let diff = targetAngle - this.angle;
             while (diff < -Math.PI) diff += Math.PI * 2;
             while (diff > Math.PI) diff -= Math.PI * 2;
+
             const turnRate = isFleeing ? 0.15 : 0.05;
             this.angle += diff * turnRate * speedMul;
             this.speed += (targetSpeed - this.speed) * 0.05 * speedMul;
 
+            // Position updates (scaled to preserve original feel)
             this.x += Math.cos(this.angle) * this.speed * speedMul;
             this.y += Math.sin(this.angle) * this.speed * speedMul;
 
@@ -429,6 +446,7 @@
             }
             this.wiggle += (0.22 + (this.speed * 0.13)) * speedMul;
         }
+
         draw(ctx) {
             const head = this.trail[0];
             const body = this.trail[4];
@@ -440,6 +458,7 @@
             this.drawBody(ctx, false, angle);
             ctx.restore();
         }
+
         drawBody(ctx, isShadow, angle) {
             ctx.fillStyle = isShadow ? 'rgba(0,0,0,0.33)' : this.col;
             const finWag = Math.sin(this.wiggle)*0.6;
@@ -511,21 +530,27 @@
         }
     }
 
-    // --- rest as before, including wave, stars, main loop, etc ---
-
+    // --- Wave class: use seconds for life/age, keep visual feel with scaling constants ---
     class Wave {
-        constructor(x, y, dx, dy) { this.x = x; this.y = y; this.dx = dx; this.dy = dy; this.age = 0; this.life = 100; }
-        update(delta=1/60) {
-            this.x += this.dx * 3.5 * delta * 60;
-            this.y += this.dy * 3.5 * delta * 60;
-            this.age += delta * 60;
+        constructor(x, y, dx, dy) { 
+            this.x = x; this.y = y; this.dx = dx; this.dy = dy; 
+            this.age = 0; 
+            this.life = 2.0; // seconds of life
+        }
+        update(delta=0.0166667) {
+            // movement scaled to keep original feel
+            const moveScale = 3.5 * 60; // matches previous delta*60 pattern
+            this.x += this.dx * moveScale * delta;
+            this.y += this.dy * moveScale * delta;
+            this.age += delta;
         }
         draw(ctx) {
             const prog = this.age / this.life;
             if (prog >= 1) return;
 
             const alpha = 1 - prog;
-            const spread = 20 + (this.age * 2.2);
+            // scale spread similar to original frame-based behavior
+            const spread = 20 + (this.age * 132); // ~ (delta*60)*2.2 -> per-second ~132
 
             ctx.save();
             ctx.beginPath();
@@ -559,6 +584,7 @@
             ctx.stroke(); 
         }
     }
+
     let stars = [];
     function generateStars() {
         let count = Math.floor(Math.max(45, (state.width * state.height)/13000));
@@ -626,20 +652,23 @@
     function loop(now) {
         if (!state.running) return;
         now = now || performance.now();
-        let delta = Math.min(50, now - state.lastFrame) / 1000;
+        // delta in seconds, cap to 0.05s (50ms) to avoid huge jumps
+        let delta = Math.min(0.05, (now - state.lastFrame) / 1000);
         state.lastFrame = now;
         state.simTime += delta;
         drawWater(state.simTime * 1000);
 
+        // update and draw food (pellets) with delta
         if (state.food.length > 0) {
             ctx.fillStyle = '#8B4513';
             ctx.beginPath();
             state.food.forEach(f => {
-                f.update();
+                f.update(delta);
                 ctx.rect(f.x - f.size/2, f.y - f.size/2, f.size, f.size);
             });
             ctx.fill();
         }
+
         const ix = state.input.active ? state.input.x : null;
         const iy = state.input.active ? state.input.y : null;
         state.fish.forEach(f => { f.update(ix, iy, delta); f.draw(ctx); });
@@ -655,6 +684,7 @@
 
         state.animationId = requestAnimationFrame(loop);
     }
+
     function handleInput(e) {
         e.preventDefault();
         if (state.audioEnabled && state.audioCtx && state.audioCtx.state === 'suspended') state.audioCtx.resume();
@@ -696,6 +726,7 @@
         } 
         else { state.input.active = false; }
     }
+
     function toggleAudio(force) {
         const desired = force !== undefined ? force : !state.audioEnabled;
         state.audioEnabled = desired;
@@ -766,8 +797,6 @@
     document.getElementById('btn-night').addEventListener('click', (e) => { e.stopPropagation(); toggleNight(); });
     window.addEventListener("beforeunload", () => { cleanupAudio(); });
     init();
-
-    // ... rest same ...
     </script>
 </body>
 </html>
