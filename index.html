@@ -228,13 +228,15 @@
         }
     }
 
-    // Pellet now updates with true seconds
+    // Pellet now updates with true seconds and growth scaled to 30 fps baseline feel
     class Pellet {
         constructor(x, y) { this.x = x; this.y = y; this.size = 0; this.targetSize = 4; this.age = 0; }
         update(delta) { 
             // delta in seconds
             this.age += delta;
-            const growthPerSecond = 30; // original behavior ~0.5 per frame at 60fps => 30/s
+            // original growth was ~0.5 per frame at 60fps -> 30 per second.
+            // now baseline is 30fps, so per-second growth should reflect original per-frame behavior: 0.5 * 30 = 15 /s
+            const growthPerSecond = 15;
             if (this.size < this.targetSize) this.size = Math.min(this.targetSize, this.size + growthPerSecond * delta);
         }
     }
@@ -268,7 +270,7 @@
         ctx.restore();
     }
 
-    // --- FISH class ---
+    // --- Fish class ---
     class Fish {
         constructor() { this.reset(); }
         reset() {
@@ -327,15 +329,13 @@
             }
             return { amount: mode*deg * Math.PI/180, duration: swerveDuration };
         }
-        update(ix, iy, delta=0.0166667) { // delta in seconds
-            // Keep timer-based behavior in seconds
-            const speedMul = delta * 60; // preserve original motion feel by scaling (60 frames per second baseline)
-
+        update(ix, iy, delta=1/60) {
+            // switch baseline scaling factor from 60->30 to better suit 30fps device behavior
+            let speedMul = delta * 30;
             let targetAngle = this.angle;
             let targetSpeed = CONFIG.baseSpeed;
             let isFleeing = false;
             let doWander = (!state.feedingMode && ix == null && iy == null) || (state.feedingMode && state.food.length==0);
-
             if (doWander) {
                 this.idleMoveTimer += delta;
                 if (
@@ -343,7 +343,7 @@
                     (this.backForthMode && this.idleTurnState?.time >= this.idleTurnState?.duration)
                 ) {
                     let swv;
-                    if (this.backForthMode && this.bfStep < (this.bfSeq ? this.bfSeq.length - 1 : -1) && this.idleTurnState && this.idleTurnState.time >= this.idleTurnState.duration) {
+                    if (this.backForthMode && this.bfStep < this.bfSeq.length-1 && this.idleTurnState && this.idleTurnState.time >= this.idleTurnState.duration) {
                         this.bfStep++;
                         swv = this.bfSeq[this.bfStep];
                     } else {
@@ -356,14 +356,14 @@
                         duration: swv.duration,
                         angleRate: swv.amount / swv.duration
                     };
-                    if (!this.backForthMode || (this.bfStep=== (this.bfSeq ? this.bfSeq.length - 1 : 0))) {
+                    if (!this.backForthMode || (this.bfStep===this.bfSeq.length-1)) {
                         this.idleMoveTimer = 0;
                         this.idleMoveInterval = this.randomInterval();
                         this.backForthMode = false;
                     }
                 }
                 if (this.idleTurnState && this.idleTurnState.time < this.idleTurnState.duration) {
-                    let dt = Math.min(delta, this.idleTurnState.duration - this.idleTurnState.time);
+                    let dt = Math.min(delta, this.idleTurnState.duration-this.idleTurnState.time);
                     targetAngle += this.idleTurnState.angleRate * dt;
                     this.idleTurnState.time += dt;
                 }
@@ -372,8 +372,6 @@
                 this.idleTurnState = undefined;
                 this.backForthMode = false;
             }
-
-            // Flee from input when not feeding
             if (!state.feedingMode && ix !== null) {
                 const dx = this.x - ix;
                 const dy = this.y - iy;
@@ -386,11 +384,9 @@
                     targetAngle += (Math.random()-0.5) * 0.8;
                 }
             }
-
-            // Seek food if present
             if (!isFleeing && state.food.length > 0) {
                 let nearestFood = null;
-                let nearestDistSq = Infinity;
+                let nearestDistSq = 99999999;
                 const searchBox = 300;
                 for(let i=0; i<state.food.length; i++){
                     const f = state.food[i];
@@ -416,16 +412,13 @@
                     }
                 }
             }
-
             let diff = targetAngle - this.angle;
             while (diff < -Math.PI) diff += Math.PI * 2;
             while (diff > Math.PI) diff -= Math.PI * 2;
-
             const turnRate = isFleeing ? 0.15 : 0.05;
             this.angle += diff * turnRate * speedMul;
             this.speed += (targetSpeed - this.speed) * 0.05 * speedMul;
 
-            // Position updates (scaled to preserve original feel)
             this.x += Math.cos(this.angle) * this.speed * speedMul;
             this.y += Math.sin(this.angle) * this.speed * speedMul;
 
@@ -446,7 +439,6 @@
             }
             this.wiggle += (0.22 + (this.speed * 0.13)) * speedMul;
         }
-
         draw(ctx) {
             const head = this.trail[0];
             const body = this.trail[4];
@@ -458,7 +450,6 @@
             this.drawBody(ctx, false, angle);
             ctx.restore();
         }
-
         drawBody(ctx, isShadow, angle) {
             ctx.fillStyle = isShadow ? 'rgba(0,0,0,0.33)' : this.col;
             const finWag = Math.sin(this.wiggle)*0.6;
@@ -530,18 +521,14 @@
         }
     }
 
-    // --- Wave class: use seconds for life/age, keep visual feel with scaling constants ---
+    // --- rest as before, including wave, stars, main loop, etc ---
+
     class Wave {
-        constructor(x, y, dx, dy) { 
-            this.x = x; this.y = y; this.dx = dx; this.dy = dy; 
-            this.age = 0; 
-            this.life = 2.0; // seconds of life
-        }
-        update(delta=0.0166667) {
-            // movement scaled to keep original feel
-            const moveScale = 3.5 * 60; // matches previous delta*60 pattern
-            this.x += this.dx * moveScale * delta;
-            this.y += this.dy * moveScale * delta;
+        constructor(x, y, dx, dy) { this.x = x; this.y = y; this.dx = dx; this.dy = dy; this.age = 0; this.life = 2.0; }
+        update(delta=1/60) {
+            // movement scaled to 30fps baseline feel
+            this.x += this.dx * 3.5 * delta * 30;
+            this.y += this.dy * 3.5 * delta * 30;
             this.age += delta;
         }
         draw(ctx) {
@@ -549,8 +536,8 @@
             if (prog >= 1) return;
 
             const alpha = 1 - prog;
-            // scale spread similar to original frame-based behavior
-            const spread = 20 + (this.age * 132); // ~ (delta*60)*2.2 -> per-second ~132
+            // spread scaled for 30fps baseline: 2.2 * 30 = 66
+            const spread = 20 + (this.age * 66);
 
             ctx.save();
             ctx.beginPath();
@@ -584,7 +571,6 @@
             ctx.stroke(); 
         }
     }
-
     let stars = [];
     function generateStars() {
         let count = Math.floor(Math.max(45, (state.width * state.height)/13000));
@@ -652,13 +638,11 @@
     function loop(now) {
         if (!state.running) return;
         now = now || performance.now();
-        // delta in seconds, cap to 0.05s (50ms) to avoid huge jumps
         let delta = Math.min(0.05, (now - state.lastFrame) / 1000);
         state.lastFrame = now;
         state.simTime += delta;
         drawWater(state.simTime * 1000);
 
-        // update and draw food (pellets) with delta
         if (state.food.length > 0) {
             ctx.fillStyle = '#8B4513';
             ctx.beginPath();
@@ -668,7 +652,6 @@
             });
             ctx.fill();
         }
-
         const ix = state.input.active ? state.input.x : null;
         const iy = state.input.active ? state.input.y : null;
         state.fish.forEach(f => { f.update(ix, iy, delta); f.draw(ctx); });
@@ -684,7 +667,6 @@
 
         state.animationId = requestAnimationFrame(loop);
     }
-
     function handleInput(e) {
         e.preventDefault();
         if (state.audioEnabled && state.audioCtx && state.audioCtx.state === 'suspended') state.audioCtx.resume();
@@ -726,7 +708,6 @@
         } 
         else { state.input.active = false; }
     }
-
     function toggleAudio(force) {
         const desired = force !== undefined ? force : !state.audioEnabled;
         state.audioEnabled = desired;
