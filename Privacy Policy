@@ -1,0 +1,34 @@
+Privacy Policy for Koi Chi
+Effective Date: March 1, 2026
+
+1. Introduction
+Koi Chi (the "Application") is designed as a privacy-first, offline-capable experience. We believe that your relaxation shouldn't come at the cost of your data.
+
+2. Data Collection & Usage
+Personal Information: The Application does not collect any personally identifiable information (PII), such as your name, email address, location, or contacts.
+
+Device Data: We do not access your device's microphone, camera, or files.
+
+Permissions: On Android/Google Play, the app may require "Internet" permission solely to load the initial web view if hosted remotely, but no user data is transmitted over this connection.
+
+3. Analytics and Advertising
+No Tracking: This Application does not use any third-party analytics (like Google Analytics or Firebase) to track your behavior.
+
+No Ads: There are no advertisements in the Application, meaning no Ad-IDs or tracking "cookies" are generated or shared with advertisers.
+
+4. Local Storage
+The Application uses a small amount of Local Storage (on the web) or SharedPreferences (on Android) strictly to remember your settings:
+
+Audio Preference: Whether you prefer the sound on or off.
+
+Night Mode: Your last selected theme.
+This data remains on your physical device and is never uploaded to a server.
+
+5. Children’s Privacy
+Since the Application does not collect any data, it is fully compliant with the Children’s Online Privacy Protection Act (COPPA) and GDPR. We do not knowingly or unknowingly collect information from children.
+
+6. Changes to This Policy
+We may update our Privacy Policy from time to time. Since we do not collect your email, we recommend checking the GitHub repository for any updates to this text.
+
+7. Contact Us
+If you have any questions regarding privacy while using the Application, please contact us via the GitHub repository issues page.
