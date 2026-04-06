@@ -10,6 +10,8 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.util.Log;
+import com.google.android.gms.ads.AdError;
+import com.google.android.gms.ads.FullScreenContentCallback;
 import com.google.android.gms.ads.MobileAds;
 import com.google.android.gms.ads.rewarded.RewardedAd;
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
@@ -30,9 +32,11 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // Initialize Google Mobile Ads SDK
-        MobileAds.initialize(this);
-        
+        // Initialize Google Mobile Ads SDK — wait for completion before loading ads
+        MobileAds.initialize(this, initializationStatus -> {
+            Log.d(TAG, "MobileAds initialized: " + initializationStatus.getAdapterStatusMap().toString());
+            loadRewardedAd();
+        });
         // Fullscreen mode
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(
@@ -71,9 +75,6 @@ public class MainActivity extends Activity {
         // Load deployed Koi Chi game page
         webView.loadUrl(GAME_URL);
         
-        // Preload a rewarded ad
-        loadRewardedAd();
-        
         setContentView(webView);
     }
 
@@ -88,6 +89,7 @@ public class MainActivity extends Activity {
 
         com.google.android.gms.ads.AdRequest adRequest = new com.google.android.gms.ads.AdRequest.Builder().build();
         isLoadingAd = true;
+        Log.d(TAG, "Starting to load rewarded ad...");
 
         RewardedAd.load(this, REWARDED_AD_UNIT_ID, adRequest, new RewardedAdLoadCallback() {
             @Override
@@ -95,13 +97,29 @@ public class MainActivity extends Activity {
                 rewardedAd = ad;
                 isLoadingAd = false;
                 Log.d(TAG, "Rewarded ad loaded successfully");
+
+                // Handle ad being dismissed without reward (e.g. user skips)
+                rewardedAd.setFullScreenContentCallback(new FullScreenContentCallback() {
+                    @Override
+                    public void onAdFailedToShowFullScreenContent(AdError adError) {
+                        Log.w(TAG, "Ad failed to show: " + adError.getMessage());
+                        rewardedAd = null;
+                        loadRewardedAd();
+                    }
+                    @Override
+                    public void onAdDismissedFullScreenContent() {
+                        Log.d(TAG, "Ad dismissed");
+                        rewardedAd = null;
+                        loadRewardedAd();
+                    }
+                });
             }
 
             @Override
             public void onAdFailedToLoad(LoadAdError loadAdError) {
                 rewardedAd = null;
                 isLoadingAd = false;
-                Log.w(TAG, "Failed to load rewarded ad: " + loadAdError.getMessage());
+                Log.w(TAG, "Failed to load rewarded ad — code: " + loadAdError.getCode() + " msg: " + loadAdError.getMessage());
             }
         });
     }
