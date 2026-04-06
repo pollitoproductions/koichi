@@ -781,10 +781,8 @@
             document.getElementById('modal-overlay').classList.remove('active');
         }
 
-        function unlockNightMode() {
-            // Show the confirmation modal
-            showAdModal();
-        }
+
+        // unlockNightMode is no longer needed; logic is now in the event handler below
 
         function enableNightMode() {
             // Mark reward as unlocked for this session
@@ -800,7 +798,20 @@
         
         document.getElementById('btn-audio').addEventListener('click', (e) => { e.stopPropagation(); toggleAudio(); });
         document.getElementById('btn-mode').addEventListener('click', (e) => { e.stopPropagation(); toggleMode(); });
-        document.getElementById('btn-night').addEventListener('click', (e) => { e.stopPropagation(); unlockNightMode(); });
+        document.getElementById('btn-night').addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (state.nightModeUnlocked) {
+                // Toggle between day and night freely after unlocking
+                state.nightMode = !state.nightMode;
+                document.getElementById('btn-night').classList.toggle('active', state.nightMode);
+            } else {
+                // Only show ad modal the first time night mode is activated in this session
+                if (!state.nightMode) {
+                    showAdModal();
+                }
+                // If already in night mode and not unlocked, do nothing (can't toggle back until unlocked)
+            }
+        });
 
         // Modal button handlers
         document.getElementById('modal-btn-yes').addEventListener('click', (e) => {
