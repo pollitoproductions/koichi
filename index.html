@@ -55,6 +55,104 @@
             color: #fff;
         }
         .btn svg { width: 24px; height: 24px; fill: currentColor; }
+
+        /* Modal Overlay and Dialog */
+        #modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #modal-overlay.active {
+            display: flex;
+        }
+
+        #modal-dialog {
+            background: linear-gradient(135deg, rgba(0, 30, 40, 0.95) 0%, rgba(0, 20, 30, 0.95) 100%);
+            border: 2px solid rgba(100, 255, 230, 0.3);
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 90%;
+            width: 320px;
+            box-shadow: 0 8px 32px rgba(0, 200, 200, 0.2), inset 0 0 20px rgba(100, 255, 230, 0.05);
+            backdrop-filter: blur(10px);
+            text-align: center;
+            animation: modalSlideIn 0.3s ease-out;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        #modal-dialog h2 {
+            margin: 0 0 16px 0;
+            font-size: 20px;
+            color: rgba(200, 255, 255, 0.95);
+            font-weight: 600;
+        }
+
+        #modal-dialog p {
+            margin: 0 0 28px 0;
+            font-size: 16px;
+            color: rgba(200, 255, 255, 0.8);
+            line-height: 1.5;
+        }
+
+        #modal-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .modal-btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease-out;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .modal-btn-no {
+            background: rgba(100, 100, 100, 0.3);
+            color: rgba(200, 255, 255, 0.8);
+            border: 1px solid rgba(100, 100, 100, 0.5);
+        }
+
+        .modal-btn-no:active {
+            background: rgba(100, 100, 100, 0.5);
+            transform: scale(0.95);
+        }
+
+        .modal-btn-yes {
+            background: linear-gradient(135deg, rgba(100, 255, 200, 0.3), rgba(100, 255, 230, 0.2));
+            color: rgba(100, 255, 230, 1);
+            border: 1.5px solid rgba(100, 255, 230, 0.6);
+            box-shadow: 0 0 12px rgba(100, 255, 230, 0.2);
+        }
+
+        .modal-btn-yes:active {
+            background: linear-gradient(135deg, rgba(100, 255, 200, 0.4), rgba(100, 255, 230, 0.3));
+            box-shadow: 0 0 20px rgba(100, 255, 230, 0.4);
+            transform: scale(0.95);
+        }
     </style>
 </head>
 <body>
@@ -74,6 +172,18 @@
     </div>
 
     <canvas id="gameCanvas"></canvas>
+
+    <!-- Ad Confirmation Modal -->
+    <div id="modal-overlay">
+        <div id="modal-dialog">
+            <h2>Watch an Ad?</h2>
+            <p>Watch an ad to unlock Night Mode and support the development of this project!</p>
+            <div id="modal-buttons">
+                <button class="modal-btn modal-btn-no" id="modal-btn-no">No</button>
+                <button class="modal-btn modal-btn-yes" id="modal-btn-yes">Yes</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         const CONFIG = {
@@ -100,6 +210,7 @@
             audioEnabled: false,
             feedingMode: false,
             nightMode: false,
+            nightModeUnlocked: false, // Session-based reward from watching ad
             running: true,
 
             lastTime: 0, // For Delta Time
@@ -591,6 +702,11 @@
 
         // --- INPUTS ---
         function handleInput(e) {
+            // Don't process game input if modal is open
+            if (document.getElementById('modal-overlay').classList.contains('active')) {
+                return;
+            }
+
             e.preventDefault();
             if (state.audioEnabled && state.audioCtx && state.audioCtx.state === 'suspended') state.audioCtx.resume();
 
@@ -656,13 +772,60 @@
             document.getElementById('btn-night').classList.toggle('active', state.nightMode);
         }
 
+        // AdMob Rewarded Ad Integration
+        function showAdModal() {
+            document.getElementById('modal-overlay').classList.add('active');
+        }
+
+        function hideAdModal() {
+            document.getElementById('modal-overlay').classList.remove('active');
+        }
+
+        function unlockNightMode() {
+            // Show the confirmation modal
+            showAdModal();
+        }
+
+        function enableNightMode() {
+            // Mark reward as unlocked for this session
+            state.nightModeUnlocked = true;
+            state.nightMode = true;
+            document.getElementById('btn-night').classList.add('active');
+            hideAdModal();
+        }
+
         window.addEventListener('resize', resize);
         ['mousedown', 'mousemove', 'mouseup', 'mouseleave', 'touchstart', 'touchmove', 'touchend']
             .forEach(ev => canvas.addEventListener(ev, handleInput, {passive: false}));
         
         document.getElementById('btn-audio').addEventListener('click', (e) => { e.stopPropagation(); toggleAudio(); });
         document.getElementById('btn-mode').addEventListener('click', (e) => { e.stopPropagation(); toggleMode(); });
-        document.getElementById('btn-night').addEventListener('click', (e) => { e.stopPropagation(); toggleNight(); });
+        document.getElementById('btn-night').addEventListener('click', (e) => { e.stopPropagation(); unlockNightMode(); });
+
+        // Modal button handlers
+        document.getElementById('modal-btn-yes').addEventListener('click', (e) => {
+            e.stopPropagation();
+            // Call Android to show the rewarded ad
+            if (window.Android && Android.showRewardedAd) {
+                Android.showRewardedAd();
+            } else {
+                // Fallback: If no Android interface (e.g., in browser), just enable immediately
+                enableNightMode();
+            }
+        });
+
+        document.getElementById('modal-btn-no').addEventListener('click', (e) => {
+            e.stopPropagation();
+            hideAdModal();
+        });
+
+        // Modal click handlers
+        document.getElementById('modal-overlay').addEventListener('click', (e) => {
+            // Close modal if clicking on the overlay background (outside the dialog)
+            if (e.target === document.getElementById('modal-overlay')) {
+                hideAdModal();
+            }
+        });
 
         init();
     </script>
