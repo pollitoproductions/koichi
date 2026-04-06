@@ -816,13 +816,13 @@
         // Modal button handlers
         document.getElementById('modal-btn-yes').addEventListener('click', (e) => {
             e.stopPropagation();
-            // Call Android to show the rewarded ad
+            hideAdModal();
+            // Call Android to show the rewarded ad. Night mode is only unlocked via enableNightMode()
+            // which is called by the Android side after the ad is successfully watched.
             if (window.Android && Android.showRewardedAd) {
                 Android.showRewardedAd();
-            } else {
-                // Fallback: If no Android interface (e.g., in browser), just enable immediately
-                enableNightMode();
             }
+            // No fallback: ad must be watched to unlock night mode
         });
 
         document.getElementById('modal-btn-no').addEventListener('click', (e) => {
