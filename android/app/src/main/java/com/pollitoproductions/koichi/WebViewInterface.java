@@ -23,7 +23,8 @@ public class WebViewInterface {
     public void showRewardedAd() {
         Log.d(TAG, "showRewardedAd called from JavaScript");
         if (activity != null) {
-            activity.showRewardedAd();
+            // Must run on UI thread — @JavascriptInterface callbacks run on a background thread
+            activity.runOnUiThread(() -> activity.showRewardedAd());
         }
     }
 }

@@ -117,15 +117,25 @@ public class MainActivity extends Activity {
                 @Override
                 public void onUserEarnedReward(com.google.android.gms.ads.rewarded.RewardItem reward) {
                     Log.d(TAG, "User earned reward: " + reward.getType() + " - " + reward.getAmount());
-                    // Notify JavaScript that reward was earned
+                    // Notify JavaScript that reward was earned — night mode is unlocked
                     enableNightModeInWebView();
                 }
             });
             // Preload next ad after showing
+            rewardedAd = null;
             loadRewardedAd();
         } else {
-            Log.w(TAG, "Rewarded ad not ready yet");
-            // Reload ad if not ready
+            Log.w(TAG, "Rewarded ad not ready yet — notifying user via JavaScript");
+            // Tell the JS to show a message and re-open the modal once the ad is ready
+            if (webView != null) {
+                webView.post(() -> webView.evaluateJavascript(
+                    "(function(){ " +
+                    "  var overlay = document.getElementById('modal-overlay'); " +
+                    "  var p = document.querySelector('#modal-dialog p'); " +
+                    "  if(p) p.textContent = 'Ad is loading\\u2026 please try again in a moment.'; " +
+                    "  if(overlay) overlay.classList.add('active'); " +
+                    "})()", null));
+            }
             loadRewardedAd();
         }
     }
